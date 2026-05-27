@@ -1121,6 +1121,7 @@ function syncAskUserUi() {
 
 /* ═══════════════ 渲染后增强 (PR移植) ═══════════════ */
 /* ───────────── 统一复制 SVG Icon ───────────── */
+const GA_ICON = (name, className = '') => (typeof window.gaIcon === 'function' ? window.gaIcon(name, className) : '');
 const SVG_COPY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const SVG_CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
@@ -1582,12 +1583,12 @@ function renderSessionList() {
     const item = document.createElement('div');
     item.className = 'conv-item' + (currentPage === 'chat' && sess.id === state.activeId ? ' active' : '') + (busy ? '' : ' idle');
     item.dataset.id = sess.id;
-    const pinSvg = sess.pinned ? `<svg class="ci-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6z"/></svg>` : '';
+    const pinSvg = sess.pinned ? GA_ICON('pushPinSimple', 'ci-pin') : '';
     item.innerHTML =
       `<span class="ci-dot"></span><div class="ci-main">` +
       `<div class="ci-title">${pinSvg}${escapeHtml(sess.title || t('conv.defaultTitle'))}</div>` +
       `<div class="ci-meta">${busy ? t('status.running') : t('status.idle')}</div></div>` +
-      `<button class="ci-more" title="${escapeHtml(t('common.more'))}"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>`;
+      `<button class="ci-more" title="${escapeHtml(t('common.more'))}">${GA_ICON('dotsThreeVertical')}</button>`;
     convListEl.appendChild(item);
   }
 }
@@ -1992,8 +1993,8 @@ async function selectModel(id, name) {
   renderSettingsModels();
   await persistUiPrefs();
 }
-const MODEL_ACT_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-const MODEL_ACT_DEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+const MODEL_ACT_EDIT = GA_ICON('pencilSimple');
+const MODEL_ACT_DEL = GA_ICON('trash');
 let editingModelId = null;
 
 function setModelApikeyMode(isAdd) {
@@ -2760,7 +2761,7 @@ const BUILTIN_PRESETS = [
   { key: 'mine',    titleKey: 'preset.mine.t',    descKey: 'preset.mine.d',    promptKey: 'presetPrompt.mine',
     iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' },
 ];
-const ADD_ICON_SVG = '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const ADD_ICON_SVG = GA_ICON('plus', 'fc-ic');
 
 state.customPresets = [];
 state.hiddenBuiltins = new Set();
@@ -2989,7 +2990,7 @@ function isPreviewableByName(name) {
 }
 
 /* ═══════════════ 消息通道（复用 gaServiceStore + WS 同步） ═══════════════ */
-const CHAN_ICON = '<svg class="lr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+const CHAN_ICON = GA_ICON('chatTeardropText', 'lr-ic');
 const CHAN_FILE_LABELS = {
   'qqapp.py': 'ch.qq',
   'wechatapp.py': 'ch.wechat',

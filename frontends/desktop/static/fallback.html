@@ -3,27 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <title>GenericAgent — Setup</title>
+<link rel="stylesheet" href="assets/fonts/fonts.css">
 <style>
-:root{--bg:#fff;--text:#0a0a0a;--muted:#6b6b6b;--border:#e8e8e8;--accent:#0a0a0a;--accent-text:#fff;--radius:10px;--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif}
+:root{--bg:#fff;--text:#0a0a0a;--muted:#6b6b6b;--border:#e8e8e8;--accent:#0a0a0a;--accent-text:#fff;--radius:10px;--font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;--font-brand:"GA Azonix",var(--font-ui);--font-title-en:"GA Lexend",var(--font-ui);--font-body-en:"GA Noto Sans",var(--font-ui);--font-config-mono:"GA JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;--font-num:var(--font-config-mono);--font-num-variant:lining-nums tabular-nums}
 @media(prefers-color-scheme:dark){:root{--bg:#1a1a1a;--text:#ededed;--muted:#a0a0a0;--border:#2a2a2a;--accent:#ededed;--accent-text:#0a0a0a}}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;font-family:var(--font);background:var(--bg);color:var(--text);display:flex;align-items:center;justify-content:center}
+html,body{margin:0;height:100%;font-family:var(--font-body-en);background:var(--bg);color:var(--text);display:flex;align-items:center;justify-content:center}
 .card{max-width:480px;width:90%;padding:2.5rem;border:1px solid var(--border);border-radius:var(--radius);text-align:center}
-h1{font-size:1.4rem;margin:0 0 .5rem}
+.setup-brand{font-family:var(--font-brand);font-size:1.05rem;line-height:.92;letter-spacing:.02em;margin:0 0 .85rem}
+h1{font-family:var(--font-title-en);font-size:1.4rem;margin:0 0 .5rem}
 p{color:var(--muted);font-size:.9rem;margin:.4rem 0;line-height:1.5}
 .input-row{display:flex;gap:8px;margin-top:1.2rem}
-input[type=text]{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text);outline:none}
+input[type=text]{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text);outline:none;font-family:var(--font-config-mono);font-variant-numeric:var(--font-num-variant)}
 input[type=text]:focus{border-color:var(--accent)}
-button{padding:10px 18px;border:none;border-radius:6px;font-size:.9rem;cursor:pointer;background:var(--accent);color:var(--accent-text);font-weight:500}
+button{padding:10px 18px;border:none;border-radius:6px;font-size:.9rem;cursor:pointer;background:var(--accent);color:var(--accent-text);font-weight:500;font-family:var(--font-title-en)}
 button:hover{opacity:.85}
 button:disabled{opacity:.4;cursor:not-allowed}
-.field-label{display:block;text-align:left;font-size:.8rem;font-weight:500;margin-top:1rem;margin-bottom:.3rem;color:var(--text)}
-#status{margin-top:1rem;font-size:.85rem;min-height:1.2em}
+.field-label{display:block;text-align:left;font-size:.8rem;font-weight:500;margin-top:1rem;margin-bottom:.3rem;color:var(--text);font-family:var(--font-title-en)}
+#status{margin-top:1rem;font-size:.85rem;min-height:1.2em;font-family:var(--font-config-mono);font-variant-numeric:var(--font-num-variant)}
+.card code{font-family:var(--font-config-mono);font-variant-numeric:var(--font-num-variant)}
 .err{color:#dc2626}.ok{color:#16a34a}
 </style>
 </head>
 <body>
 <div class="card">
+  <div class="setup-brand">Generic Agent</div>
   <h1>⚙️ Setup Required</h1>
   <p>The backend could not start. Please configure the paths below.</p>
   <p>后端启动失败，请配置以下路径。</p>
