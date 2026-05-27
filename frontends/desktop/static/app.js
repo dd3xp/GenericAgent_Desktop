@@ -221,10 +221,9 @@ const I18N = {
     'app.title': 'GenericAgent 桌面版',
     'brand.sub': '桌面终端',
     'nav.chat': '聊天', 'nav.channels': '消息通道', 'nav.status': '状态面板',
-    'nav.collab': 'Agent 指挥', 'nav.token': 'Token 统计',
+    'nav.collab': '协作动态', 'nav.token': 'Token 统计',
     'foot.settings': '配置', 'foot.ver': 'GenericAgent · 桌面版',
     'chat.startTitle': '开始对话', 'chat.startSub': '直接输入，或点预设功能一键启动',
-    'preset.butler.t': 'Conductor', 'preset.butler.d': '复杂任务自动拆活，进度在 Conductor 查看',
     'preset.goal.t': 'Goal 模式', 'preset.goal.d': '设定目标，自主完成',
     'preset.explore.t': '自主探索', 'preset.explore.d': '自动浏览并周期汇总',
     'preset.hive.t': 'Hive 协作', 'preset.hive.d': '多 worker 协同攻坚',
@@ -259,41 +258,7 @@ const I18N = {
     'confirm.modelDelete': '确定删除该模型配置？',
     'page.channels.title': '消息通道', 'page.channels.sub': '后台 IM 进程：列表、启停与日志（同 hub.pyw）',
     'page.status.title': '状态面板', 'page.status.sub': 'hub.pyw 管理的后台进程/服务，集中查看与启停',
-    'page.collab.title': 'Conductor', 'page.collab.sub': '交代目标，自动拆活与跟进',
-    'collab.progressTitle': '分工进度',
-    'collab.progressEmpty': '还没有任务在执行。告诉 Conductor 你的目标后，这里会显示拆分后的处理进度。',
-    'collab.chatTitle': '与 Conductor 对话',
-    'collab.placeholder': '描述你想完成的目标，Enter 发送…',
-    'collab.guideTitle': '把要完成的事告诉 Conductor',
-    'collab.guideWhen': '适合需要多步处理、要花一些时间才能完成的目标。日常聊天和快问快答，请用左侧「聊天」。',
-    'collab.guideStep1t': '描述目标',
-    'collab.guideStep1d': '在聊天框里写下你想做的事，发给 Conductor',
-    'collab.guideStep2t': '自动拆解',
-    'collab.guideStep2d': 'Conductor 自动拆解、分配任务，实时监督和调度',
-    'collab.guideStep3t': '交付摘要',
-    'collab.guideStep3d': 'Conductor 根据执行状态，呈上任务简报',
-    'collab.guideStep4t': '随时调整',
-    'collab.guideStep4d': '随时补充要求或细节，Conductor 都会处理',
-    'collab.chipProgress': '现在进展如何？',
-    'collab.chipPause': '先暂停当前任务',
-    'collab.chipSummary': '总结一下目前的结果',
-    'collab.showProgressTitle': '查看任务执行进度（窄屏）',
-    'collab.progressStats': '{running} 进行中 · {done} 已完成 · {issue} 需关注',
-    'collab.typing': 'Conductor 正在处理',
-    'collab.offline': '无法连接 Conductor（8900）。请确认服务已启动且本地已穿透 8900 端口。',
-    'collab.retry': '重试',
-    'collab.reconnect': '连接断开，正在重连… 已保留上次任务进度。',
-    'collab.reconnectIn': '{n} 秒后重试',
-    'collab.sticky': '{n} 个任务进行中',
-    'collab.stRunning': '执行中', 'collab.stReported': '已回报', 'collab.stPaused': '已暂停',
-    'collab.stFailed': '遇到问题', 'collab.stTerminated': '已终止',
-    'collab.summaryRunning': '正在处理中…', 'collab.summaryWait': '等待回报',
-    'collab.taskFallback': '任务 {n}',
-    'collab.timeJust': '刚刚',
-    'collab.timeSec': '{n} 秒前',
-    'collab.timeMin': '{n} 分钟前',
-    'collab.timeHr': '{n} 小时前',
-    'collab.timeDay': '{n} 天前',
+    'page.collab.title': '协作动态', 'page.collab.sub': 'subagent / Hive worker 的实时状态与产出',
     'page.token.title': 'Token 统计', 'page.token.sub': '每会话与累计的 token 用量及估算成本',
     'status.connecting': '连接中…', 'status.ready': '就绪', 'status.running': '运行中',
     'status.disconnected': '未连接', 'status.stopped': '已停止', 'status.idle': '空闲',
@@ -322,7 +287,6 @@ const I18N = {
     'upload.dropHint': '松开以上传文件',
     'lightbox.closeTitle': '关闭',
     'fold.thinking': '思考', 'fold.tool': '工具调用', 'fold.toolResult': '工具结果', 'fold.llm': 'LLM Running', 'fold.turn': '第 {n} 轮',
-    'timing.elapsed': '已运行 {t}',
     'model.auto': '自动选择',
     'model.menuLabel': '选择模型',
     'chip.plan': 'Plan',
@@ -346,7 +310,7 @@ const I18N = {
     'cm.master': '已派 3 子任务', 'cm.w1': '子任务：抓取数据', 'cm.w2': '子任务：复核结果', 'cm.sub': '等待派单',
     'tok.total': '累计 token', 'tok.cost': '估算成本', 'tok.today': '今日 token',
     'tok.colSession': '会话', 'tok.colIn': '输入', 'tok.colOut': '输出', 'tok.colCacheW': '缓存写入', 'tok.colCache': '缓存读取', 'tok.colCost': '成本',
-    'tok.from': '从', 'tok.to': '到', 'tok.reset': '重置', 'tok.noData': '暂无记录', 'tok.deleted': '此会话已删除',
+    'tok.from': '从', 'tok.to': '到', 'tok.reset': '重置', 'tok.noData': '暂无记录',
     'tok.pricingUnknown': '⚠ 此模型计费规则尚未明确，按默认估算',
     'tok.priceInput': '输入: $', 'tok.priceOutput': '输出: $',
     'tok.priceCacheW': '缓存写入: $', 'tok.priceCacheR': '缓存读取: $',
@@ -357,19 +321,14 @@ const I18N = {
     'presetPrompt.hive': '启动 Goal Hive 模式：按 hive SOP 拉起多个 worker 协同完成我接下来的目标。',
     'presetPrompt.review': '进入监察者模式：对刚才的产出严格挑刺、逐项复核并报告问题。',
     'presetPrompt.mine': '抓取本周的 git 提交并写一份周报。',
-    'ask.banner': 'GA 等你回答',
-    'ask.replyHint': '在下方输入框回复',
-    'ask.placeholderOpen': '在此输入你的回答… (Enter 发送)',
-    'ask.placeholderOpts': '输入 {keys} 选择，或直接输入自定义回答 (Enter 发送)',
   },
   en: {
     'app.title': 'GenericAgent Desktop',
     'brand.sub': 'Desktop terminal',
     'nav.chat': 'Chat', 'nav.channels': 'Channels', 'nav.status': 'Status',
-    'nav.collab': 'Conductor', 'nav.token': 'Token usage',
+    'nav.collab': 'Collaboration', 'nav.token': 'Token usage',
     'foot.settings': 'Settings', 'foot.ver': 'GenericAgent · Desktop',
     'chat.startTitle': 'Start a conversation', 'chat.startSub': 'Type a message, or pick a preset',
-    'preset.butler.t': 'Conductor', 'preset.butler.d': 'Delegate complex tasks; track progress in Conductor',
     'preset.goal.t': 'Goal mode', 'preset.goal.d': 'Set a goal, run autonomously',
     'preset.explore.t': 'Auto explore', 'preset.explore.d': 'Browse & summarize periodically',
     'preset.hive.t': 'Hive', 'preset.hive.d': 'Multi-worker collaboration',
@@ -404,41 +363,7 @@ const I18N = {
     'confirm.modelDelete': 'Delete this model profile?',
     'page.channels.title': 'Channels', 'page.channels.sub': 'Background IM processes: list, start/stop, logs (hub.pyw style)',
     'page.status.title': 'Status', 'page.status.sub': 'Background processes/services managed by hub.pyw',
-    'page.collab.title': 'Conductor', 'page.collab.sub': 'Describe a goal — split, delegate, and follow up',
-    'collab.progressTitle': 'Progress',
-    'collab.progressEmpty': 'No tasks running yet. After you describe a goal to Conductor, split tasks will appear here.',
-    'collab.chatTitle': 'Chat with Conductor',
-    'collab.placeholder': 'Describe your goal, Enter to send…',
-    'collab.guideTitle': 'Tell Conductor what you want done',
-    'collab.guideWhen': 'Best for multi-step goals that take a while. For everyday chat and quick questions, use Chat in the sidebar.',
-    'collab.guideStep1t': 'Describe your goal',
-    'collab.guideStep1d': 'Write what you want done in the chat box and send it to Conductor',
-    'collab.guideStep2t': 'Auto breakdown',
-    'collab.guideStep2d': 'Conductor breaks down, assigns, monitors, and coordinates',
-    'collab.guideStep3t': 'Summary',
-    'collab.guideStep3d': 'Conductor delivers a briefing based on execution status',
-    'collab.guideStep4t': 'Adjust anytime',
-    'collab.guideStep4d': 'Add requirements or details anytime — Conductor handles them',
-    'collab.chipProgress': 'How is it going?',
-    'collab.chipPause': 'Pause current tasks',
-    'collab.chipSummary': 'Summarize progress so far',
-    'collab.showProgressTitle': 'View task progress (narrow screens)',
-    'collab.progressStats': '{running} running · {done} done · {issue} need attention',
-    'collab.typing': 'Conductor is working',
-    'collab.offline': 'Cannot reach Conductor (8900). Start the service and forward port 8900.',
-    'collab.retry': 'Retry',
-    'collab.reconnect': 'Disconnected — reconnecting… Your last progress is kept.',
-    'collab.reconnectIn': 'Retry in {n}s',
-    'collab.sticky': '{n} task(s) running',
-    'collab.stRunning': 'Running', 'collab.stReported': 'Reported', 'collab.stPaused': 'Paused',
-    'collab.stFailed': 'Issue', 'collab.stTerminated': 'Ended',
-    'collab.summaryRunning': 'Working…', 'collab.summaryWait': 'Awaiting report',
-    'collab.taskFallback': 'Task {n}',
-    'collab.timeJust': 'just now',
-    'collab.timeSec': '{n}s ago',
-    'collab.timeMin': '{n}m ago',
-    'collab.timeHr': '{n}h ago',
-    'collab.timeDay': '{n}d ago',
+    'page.collab.title': 'Collaboration', 'page.collab.sub': 'Live state & output of subagents / Hive workers',
     'page.token.title': 'Token usage', 'page.token.sub': 'Per-session and total token usage & estimated cost',
     'status.connecting': 'Connecting…', 'status.ready': 'Ready', 'status.running': 'Running',
     'status.disconnected': 'Disconnected', 'status.stopped': 'Stopped', 'status.idle': 'Idle',
@@ -467,7 +392,6 @@ const I18N = {
     'upload.dropHint': 'Drop to upload files',
     'lightbox.closeTitle': 'Close',
     'fold.thinking': 'Thinking', 'fold.tool': 'Tool call', 'fold.toolResult': 'Tool result', 'fold.llm': 'LLM Running', 'fold.turn': 'Turn {n}',
-    'timing.elapsed': 'Elapsed {t}',
     'model.auto': 'Auto',
     'model.menuLabel': 'Select model',
     'chip.plan': 'Plan',
@@ -491,7 +415,7 @@ const I18N = {
     'cm.master': 'Dispatched 3 subtasks', 'cm.w1': 'Subtask: fetch data', 'cm.w2': 'Subtask: review results', 'cm.sub': 'Waiting for tasks',
     'tok.total': 'Total tokens', 'tok.cost': 'Est. cost', 'tok.today': 'Today tokens',
     'tok.colSession': 'Session', 'tok.colIn': 'Input', 'tok.colOut': 'Output', 'tok.colCacheW': 'Cache write', 'tok.colCache': 'Cache read', 'tok.colCost': 'Cost',
-    'tok.from': 'From', 'tok.to': 'To', 'tok.reset': 'Reset', 'tok.noData': 'No records', 'tok.deleted': 'Session deleted',
+    'tok.from': 'From', 'tok.to': 'To', 'tok.reset': 'Reset', 'tok.noData': 'No records',
     'tok.pricingUnknown': '⚠ Pricing not confirmed, using defaults',
     'tok.priceInput': 'Input: $', 'tok.priceOutput': 'Output: $',
     'tok.priceCacheW': 'Cache write: $', 'tok.priceCacheR': 'Cache read: $',
@@ -502,14 +426,10 @@ const I18N = {
     'presetPrompt.hive': 'Start Goal Hive mode: per the hive SOP, spawn multiple workers to collaboratively achieve the goal I describe next.',
     'presetPrompt.review': 'Enter reviewer mode: strictly scrutinize the previous output, review item by item and report issues.',
     'presetPrompt.mine': 'Collect this week\'s git commits and write a weekly report.',
-    'ask.banner': 'GA is waiting for your answer',
-    'ask.replyHint': 'Reply in the input below',
-    'ask.placeholderOpen': 'Type your answer here… (Enter to send)',
-    'ask.placeholderOpts': 'Type {keys} to pick, or enter a custom answer (Enter to send)',
   },
 };
 const LANGS = ['zh', 'en'];
-const STORE = { lang: 'ga_lang', theme: 'ga_theme', appearance: 'ga_appearance', plain: 'ga_plain', fontSize: 'ga_font_size', llmNo: 'ga_llm_no' };
+const STORE = { lang: 'ga_lang', theme: 'ga_theme', appearance: 'ga_appearance', plain: 'ga_plain', fontSize: 'ga_font_size', llmNo: 'ga_llm_no', sessions: 'ga_sessions', activeId: 'ga_active_id' };
 const APPEARANCE_IDS = ['light', 'dark'];
 const CHAT_FONT_MIN = 10;
 const CHAT_FONT_MAX = 20;
@@ -577,14 +497,6 @@ async function bridgeFetch(path, opts = {}) {
   return data;
 }
 function t(key) { return (I18N[lang] && I18N[lang][key]) || (I18N.zh[key]) || key; }
-window.gaT = t;
-document.addEventListener('collab:running-count', e => {
-  const b = document.getElementById('collab-badge');
-  if (!b) return;
-  const n = e.detail?.count || 0;
-  b.hidden = !n;
-  b.textContent = n ? (n > 9 ? '9+' : String(n)) : '';
-});
 function optionalPh(key) {
   const sep = (lang === 'en') ? ', ' : '，';
   return `${t('common.optional')}${sep}${t(key)}`;
@@ -599,8 +511,6 @@ function applyI18n() {
   });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.setAttribute('title', t(el.dataset.i18nTitle)); });
   renderLangList();
-  window.collabRetranslate?.();
-  syncAskUserUi();
 }
 // 语言对应国旗 SVG(en 用美国旗,按要求)
 const FLAGS = {
@@ -753,22 +663,12 @@ function applyAppearance(nextApp, nextPlain, { persist } = { persist: true }) {
 /* ═══════════════ 侧边栏导航 ═══════════════ */
 const nav = document.getElementById('nav');
 const pages = document.querySelectorAll('#pages .page');
-let currentPage = 'chat';
-function gaGoPage(key) {
-  const item = nav?.querySelector(`.nav-item[data-page="${key}"]`);
-  if (!item) return;
-  currentPage = key;
-  nav.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n === item));
-  pages.forEach(p => p.classList.toggle('active', p.dataset.page === key));
-  renderSessionList();
-  window.gaSetActiveFileComposer?.(key === 'collab' ? 'collab' : 'chat');
-  if (key === 'collab') window.collabInit?.();
-}
-window.gaGoPage = gaGoPage;
 nav.addEventListener('click', (e) => {
   const item = e.target.closest('.nav-item');
   if (!item) return;
-  gaGoPage(item.dataset.page);
+  const key = item.dataset.page;
+  nav.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n === item));
+  pages.forEach(p => p.classList.toggle('active', p.dataset.page === key));
 });
 
 /* ═══════════════ 弹窗开关 ═══════════════ */
@@ -898,20 +798,11 @@ function renderAssistant(text) {
   }
   // 2) 块级折叠：占位符使用 HTML 注释，避免与正文 F\d+ 冲突
   const folds = [];
-  const asks = [];
   const stash = (label, body, cls) => { folds.push({ label, body, cls: cls || '' }); return `\n\n§§FOLD:${folds.length - 1}§§\n\n`; };
-  const stashAsk = (data) => { asks.push(data); return `\n\n§§ASK:${asks.length - 1}§§\n\n`; };
   const foldBlocks = (body) => {
     let s = body;
     // thinking: 兼容 <thinking> XML 与 <details>...</details>（未来扩展）
     s = s.replace(/<thinking>[\s\S]*?<\/thinking>/gi, m => stash(t('fold.thinking'), m.replace(/<\/?thinking>/gi, ''), 'fold-thinking'));
-    // ask_user：渲染为提问卡片（必须在通用工具规则之前匹配）
-    s = s.replace(/🛠️ Tool: `ask_user`[^\n]*\n````text\n([\s\S]*?)\n````/g,
-                  (m, json) => {
-                    const data = parseAskUserJson(json);
-                    if (data && normalizeAskUserData(data)) return stashAsk(data);
-                    return stash(`${t('fold.tool')}: ask_user`, json, 'fold-tool');
-                  });
     // 工具调用：agent_loop 实际格式 = "🛠️ Tool: `name`  📥 args:\n````text\n{json}\n````"
     s = s.replace(/🛠️ Tool: `([^`]+)`[^\n]*\n````text\n([\s\S]*?)\n````/g,
                   (_, name, json) => stash(`${t('fold.tool')}: ${name}`, json, 'fold-tool'));
@@ -927,29 +818,16 @@ function renderAssistant(text) {
   // 3) 拼装：历史轮包 details 默认折叠，最后一轮平铺
   const turnLabel = (n) => t('fold.turn').replace('{n}', n);
   // 从原始 seg.body 中抽出该轮首个 <summary>...</summary> 文本，作为折叠头副标题
-  // fallback: 若无 <summary> 标签，提取该轮调用的工具名列表
   const extractTurnSummary = (raw) => {
     const m = /<summary>([\s\S]*?)<\/summary>/i.exec(raw || '');
-    if (m) return m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-    // fallback: 提取工具名
-    const tools = [];
-    const toolRe = /🛠️\s*Tool:\s*`([^`]+)`/g;
-    let tm;
-    while ((tm = toolRe.exec(raw || '')) !== null) {
-      if (!tools.includes(tm[1])) tools.push(tm[1]);
-    }
-    if (tools.length) return tools.join(', ');
-    return '';
+    if (!m) return '';
+    return m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
   };
   const parts = segs.map((seg, i) => {
+    const inner = foldBlocks(seg.body);
     const isLast = (i === segs.length - 1);
-    if (seg.n == null) return foldBlocks(seg.body);
+    if (seg.n == null) return inner;
     const sum = extractTurnSummary(seg.body);
-    // Strip the <summary> tag from body to avoid duplication with head
-    const bodyForRender = sum
-      ? seg.body.replace(/<summary>[\s\S]*?<\/summary>\s*/i, '')
-      : seg.body;
-    const inner = foldBlocks(bodyForRender);
     const head = sum
       ? `${escapeHtml(turnLabel(seg.n))}：<span class="turn-head-sum">${escapeHtml(sum)}</span>`
       : escapeHtml(turnLabel(seg.n));
@@ -957,173 +835,16 @@ function renderAssistant(text) {
     return `<details class="fold fold-turn"><summary>${head}</summary>${inner}</details>`;
   });
   // 4) 还原块级占位符
-  return parts.join('')
-    .replace(/(?:<p>\s*)?§§ASK:(\d+)§§(?:\s*<\/p>)?/g, (_, i) => renderAskUserNotice(asks[Number(i)]))
-    .replace(/(?:<p>\s*)?§§FOLD:(\d+)§§(?:\s*<\/p>)?/g, (_, i) => {
-      const f = folds[Number(i)];
-      return `<details class="fold ${f.cls}"><summary>${escapeHtml(f.label)}</summary><pre class="fold-pre">${escapeHtml(f.body)}</pre></details>`;
-    });
-}
-
-function parseAskUserJson(raw) {
-  if (raw == null) return null;
-  const txt = String(raw).trim();
-  if (!txt) return null;
-  try { return JSON.parse(txt); } catch (_) {}
-  try {
-    let out = '';
-    let inStr = false;
-    let esc = false;
-    for (let i = 0; i < txt.length; i++) {
-      const c = txt[i];
-      if (esc) { out += c; esc = false; continue; }
-      if (c === '\\') { out += c; esc = true; continue; }
-      if (c === '"') { inStr = !inStr; out += c; continue; }
-      if (inStr) {
-        if (c === '\n') out += '\\n';
-        else if (c === '\r') out += '\\r';
-        else if (c === '\t') out += '\\t';
-        else if (c.charCodeAt(0) < 0x20) out += '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0');
-        else out += c;
-      } else out += c;
-    }
-    return JSON.parse(out);
-  } catch (_) {}
-  return null;
-}
-
-function normalizeAskUserData(data) {
-  const raw = data || {};
-  const question = String(raw.question || '').trim();
-  if (!question) return null;
-  const cs = raw.candidates || [];
-  const candidates = Array.isArray(cs)
-    ? cs.map(x => String(x == null ? '' : x)).filter(x => x.trim())
-    : [];
-  return { question, candidates };
-}
-
-/** 格式化 ask_user 题干：编号与正文同行；无空行时在 2./3. 前分段 */
-function formatAskUserQuestion(text) {
-  let s = String(text || '').trim();
-  if (!s) return s;
-  // 「1.\n正文」→「1. 正文」
-  s = s.replace(/^(\d+[.、:：)])\s*\n+\s*/gm, '$1 ');
-  s = s.replace(/(\n)(\d+[.、:：)])\s*\n+\s*/g, '$1$2 ');
-  s = s.replace(/(\n|^)(问题\s*\d+\s*[:：.、)]?)\s*\n+\s*/gi, '$1$2 ');
-  // 题与题之间：尚无空行时，仅在 2./3. 前插入空行（不动 1. 与题干）
-  if (!/\n\s*\n/.test(s)) {
-    s = s.replace(/(\S)\s+(?=问题\s*[2-9]\d*\s*[:：.、)]?\s*)/gi, '$1\n\n');
-    s = s.replace(/(\S)\s+(?=[2-9]\d*[.、:：)]\s+\S)/g, '$1\n\n');
-  }
-  return boldAskQuestionLines(s);
-}
-
-function boldAskQuestionLines(text) {
-  return String(text || '').split('\n').map(line => {
-    const t = line.trim();
-    if (!t || /^\*\*.+\*\*$/.test(t)) return line;
-    if (/^\d+[.、:：)]\s+\S/.test(t)) return '**' + t + '**';
-    if (/^问题\s*\d+/i.test(t)) return '**' + t + '**';
-    if (/[？?]\s*$/.test(t) && !/^[A-Da-d][.)]\s/.test(t)) return '**' + t + '**';
-    return line;
-  }).join('\n');
-}
-
-function markAskOptionHtml(html) {
-  let out = String(html || '');
-  out = out.replace(/<p>([^<]*[A-Da-d][.)]\s[^<]*)<\/p>/gi, '<p class="ask-option-line">$1</p>');
-  out = out.replace(/(<br\s*\/?>)\s*([A-Da-d][.)]\s[^<]+)/gi, '<span class="ask-option-line">$2</span>');
-  return out;
-}
-
-/** 预览模式：true = 始终显示 candidates；看完效果后改回 false */
-const ASK_USER_ALWAYS_SHOW_CANDIDATES = true;
-
-/** 题干已含选项/多题，或 candidates 无法与题干对应时，不再重复渲染底部列表 */
-function shouldShowAskCandidates(item) {
-  if (!item || !item.candidates.length) return false;
-  if (ASK_USER_ALWAYS_SHOW_CANDIDATES) return true;
-  const q = item.question;
-  if (/两个问题|多个问题|两道|两题/.test(q)) return false;
-  if ((q.match(/问题\s*\d/gi) || []).length >= 2) return false;
-  if ((q.match(/^[ \t]*\d+[.、:：)]\s+/gm) || []).length >= 2) return false;
-  if ((q.match(/^[ \t]*[A-Da-d][.)]\s/mg) || []).length >= 2) return false;
-  const comboN = item.candidates.filter(c => /\d+[A-Da-d]\s*\+\s*\d+[A-Da-d]/i.test(c)).length;
-  if (comboN >= Math.max(1, Math.ceil(item.candidates.length * 0.5))) return false;
-  // 题干里有多道问句，却把全部选项平铺在 candidates → 无法区分归属，不展示
-  const qMarks = (q.match(/[？?]/g) || []).length;
-  if (qMarks >= 2 && item.candidates.length > 4) return false;
-  return true;
-}
-
-const ASK_USER_TOOL_RE = /🛠️ Tool: `ask_user`[^\n]*\n````text\n([\s\S]*?)\n````/;
-
-function renderAskUserNotice(data) {
-  const item = normalizeAskUserData(data);
-  if (!item) return '';
-  const qHtml = markAskOptionHtml(renderMarkdown(formatAskUserQuestion(item.question)));
-  const showCs = shouldShowAskCandidates(item);
-  const optsHtml = showCs
-    ? `<ul class="ask-candidates">${item.candidates.map((c, j) =>
-        `<li><span class="ask-candidate-key">${j + 1}.</span><span class="ask-candidate-label">${escapeHtml(c)}</span></li>`).join('')}</ul>`
-    : '';
-  return `<div class="ask-user-notice" data-ask-user="1">
-    <div class="ask-user-banner">
-      <span class="ask-user-banner-text">${escapeHtml(t('ask.banner'))}</span>
-      <span class="ask-user-banner-sep" aria-hidden="true">·</span>
-      <span class="ask-user-banner-hint">${escapeHtml(t('ask.replyHint'))}</span>
-    </div>
-    ${qHtml ? `<div class="ask-user-body md">${qHtml}</div>` : ''}
-    ${optsHtml}
-  </div>`;
-}
-
-function askUserPlaceholder(item) {
-  if (!item) return t('ask.placeholderOpen');
-  const cs = shouldShowAskCandidates(item) ? item.candidates : [];
-  if (!cs.length) return t('ask.placeholderOpen');
-  const keys = cs.slice(0, 9).map((_, i) => String(i + 1)).join('/');
-  return t('ask.placeholderOpts').replace('{keys}', keys);
-}
-
-function getPendingAskUser(sess) {
-  if (!sess || rt(sess).busy) return null;
-  const msgs = sess.messages || [];
-  let lastAskIdx = -1;
-  let askData = null;
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].role !== 'assistant') continue;
-    const m = ASK_USER_TOOL_RE.exec(msgs[i].content || '');
-    if (m) {
-      lastAskIdx = i;
-      askData = normalizeAskUserData(parseAskUserJson(m[1]));
-      break;
-    }
-  }
-  if (!askData) return null;
-  const replied = msgs.slice(lastAskIdx + 1).some(m => m.role === 'user');
-  return replied ? null : askData;
-}
-
-function syncAskUserUi() {
-  const sess = activeSess();
-  const pending = sess ? getPendingAskUser(sess) : null;
-  const notices = [...document.querySelectorAll('.ask-user-notice')];
-  notices.forEach((el, i) => {
-    const isLast = i === notices.length - 1;
-    el.classList.toggle('is-active', !!pending && isLast);
-    el.classList.toggle('is-answered', !pending || !isLast);
+  return parts.join('').replace(/(?:<p>\s*)?§§FOLD:(\d+)§§(?:\s*<\/p>)?/g, (_, i) => {
+    const f = folds[Number(i)];
+    return `<details class="fold ${f.cls}"><summary>${escapeHtml(f.label)}</summary><pre class="fold-pre">${escapeHtml(f.body)}</pre></details>`;
   });
-  if (inputEl) inputEl.setAttribute('placeholder', pending ? askUserPlaceholder(pending) : t('composer.placeholder'));
-  if (composerEl) composerEl.classList.toggle('is-awaiting-answer', !!pending);
 }
-
 /* ═══════════════ 渲染后增强 (PR移植) ═══════════════ */
 /* ───────────── 统一复制 SVG Icon ───────────── */
 const GA_ICON = (name, className = '') => (typeof window.gaIcon === 'function' ? window.gaIcon(name, className) : '');
-const SVG_COPY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-const SVG_CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const SVG_COPY_ICON = GA_ICON('copy');
+const SVG_CHECK_ICON = GA_ICON('check');
 
 function postRenderEnhance(containerEl) {
   if (!containerEl) return;
@@ -1159,7 +880,6 @@ function postRenderEnhance(containerEl) {
     el.style.position = 'relative';
     el.appendChild(btn);
   });
-  syncAskUserUi();
 }
 
 
@@ -1174,32 +894,34 @@ const state = {
 };
 function rt(sess) {
   let r = state.runtime.get(sess.id);
-  if (!r) { r = { polling:false, busy:false, lastId:0, seen:new Set(), draftEl:null, draftText:'', taskStartedAt:null, taskEndedAt:null, taskTimerId:null }; state.runtime.set(sess.id, r); }
+  if (!r) { r = { polling:false, busy:false, lastId:0, seen:new Set(), draftEl:null, draftText:'' }; state.runtime.set(sess.id, r); }
   return r;
 }
 const activeSess = () => state.sessions.get(state.activeId) || null;
 const isActive = (sess) => sess && sess.id === state.activeId;
 
-function saveSessions() {}
-function patchSession(sess, fields) {
-  if (!sess.bridgeSessionId) return;
-  fetch(`http://${location.hostname}:14168/session/${encodeURIComponent(sess.bridgeSessionId)}`, {
-    method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(fields)
-  }).catch(() => {});
-}
-async function loadSessions() {
+function saveSessions() {
   try {
-    const res = await fetch(`http://${location.hostname}:14168/sessions`);
-    const data = await res.json();
-    if (!data.sessions) return;
-    for (const s of data.sessions) {
-      state.sessions.set(s.id, {
-        id: s.id, bridgeSessionId: s.id, title: s.title,
-        messages: [], untitled: s.untitled ?? true,
-        pinned: s.pinned ?? false, lastActiveTs: s.updatedAt || s.createdAt
-      });
+    const arr = [...state.sessions.values()].map(s => ({
+      id: s.id, bridgeSessionId: s.bridgeSessionId, title: s.title,
+      untitled: s.untitled, pinned: s.pinned,
+      lastActiveTs: s.lastActiveTs
+    }));
+    localStorage.setItem(STORE.sessions, JSON.stringify(arr));
+    if (state.activeId) localStorage.setItem(STORE.activeId, state.activeId);
+  } catch (_) {}
+}
+function loadSessions() {
+  try {
+    const raw = localStorage.getItem(STORE.sessions);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    for (const s of arr) {
+      s.messages = s.messages || [];
+      state.sessions.set(s.id, s);
     }
-    if (data.activeSessionId && state.sessions.has(data.activeSessionId)) state.activeId = data.activeSessionId;
+    const savedActive = localStorage.getItem(STORE.activeId);
+    if (savedActive && state.sessions.has(savedActive)) state.activeId = savedActive;
     else if (state.sessions.size) state.activeId = state.sessions.keys().next().value;
   } catch (_) {}
 }
@@ -1306,7 +1028,7 @@ function msgNode(msg) {
   if (msg.role === 'user') {
     const shown = (typeof msg.display === 'string' && msg.display.length) ? msg.display : msg.content;
     const imgsHtml = (msg.images && msg.images.length)
-      ? `<div class="user-imgs">${msg.images.map(im => `<img src="${im.dataUrl || uploadRawUrl(im.path)}" data-path="${escapeHtml(im.path || '')}" alt="">`).join('')}</div>`
+      ? `<div class="user-imgs">${msg.images.map(im => `<img src="${im.dataUrl}" alt="">`).join('')}</div>`
       : '';
     const filesHtml = (msg.files && msg.files.length)
       ? `<div class="user-files">${msg.files.map(f => {
@@ -1348,49 +1070,12 @@ function msgNode(msg) {
 function renderAllMessages(sess) {
   const box = ensureMsgs(); box.innerHTML = '';
   for (const m of sess.messages) box.appendChild(msgNode(m));
-  syncAskUserUi();
-  // badge 恢复在 pollSession finally 中执行（此时 messages 已通过异步加载填充）
   refreshEmptyState(sess); scrollBottom(true);
-}
-// 遍历消息对，用 ts 差值恢复 badge；对运行中任务恢复 taskStartedAt
-function restoreElapsedBadges(sess, box) {
-  const msgs = sess.messages;
-  if (!msgs || !msgs.length) return;
-  const nodes = box.querySelectorAll('.msg');
-  let lastUserTs = null;
-  for (let i = 0; i < msgs.length; i++) {
-    if (msgs[i].role === 'user') {
-      lastUserTs = msgs[i].ts ? msgs[i].ts * 1000 : null; // 无 ts 则重置
-    } else if (msgs[i].role === 'assistant') {
-      if (lastUserTs && msgs[i].ts) {
-        const elapsed = msgs[i].ts * 1000 - lastUserTs;
-        if (elapsed > 0 && nodes[i]) {
-          ensureTaskElapsedBadge(nodes[i], lastUserTs, msgs[i].ts * 1000);
-        }
-      }
-      lastUserTs = null;
-    }
-  }
-  // 运行中任务：最后一条是 user 且 session busy，恢复实时计时
-  if (lastUserTs && rt(sess).busy) {
-    const r = rt(sess);
-    r.taskStartedAt = lastUserTs;
-    r.taskEndedAt = null;
-  }
 }
 function appendMessage(sess, msg) {
   if (!isActive(sess)) return;
-  const el = msgNode(msg);
-  ensureMsgs().appendChild(el);
-  if (msg.role === 'assistant') {
-    const r = rt(sess);
-    if (r.taskStartedAt) {
-      ensureTaskElapsedBadge(el, r.taskStartedAt, r.taskEndedAt || Date.now());
-      r.taskStartedAt = null; r.taskEndedAt = null;
-    }
-  }
+  ensureMsgs().appendChild(msgNode(msg));
   refreshEmptyState(sess); scrollBottom(true);
-  if (msg.role === 'assistant' || msg.role === 'user') syncAskUserUi();
 }
 function isNearBottom(threshold = 80) {
   return msgArea.scrollHeight - msgArea.scrollTop - msgArea.clientHeight < threshold;
@@ -1410,8 +1095,6 @@ function renderDraft(sess) {
   const box = ensureMsgs();
   if (!r.draftEl || r.draftEl.parentNode !== box) {
     r.draftEl = document.createElement('div'); r.draftEl.className = 'msg assistant'; box.appendChild(r.draftEl);
-    // 正在计时则立即挂载 badge，避免等 1s tick 后才出现导致跳动
-    if (r.taskStartedAt) ensureTaskElapsedBadge(r.draftEl, r.taskStartedAt, null);
   }
   if (!r.twState) r.twState = { shown: 0, timer: null };
   const tw = r.twState;
@@ -1432,13 +1115,10 @@ function renderDraft(sess) {
   refreshEmptyState(sess);
 }
 
-// 重写打字机气泡：先记 near + 保存 <details> open 态 + badge；innerHTML 替换后恢复；仅当原先贴底才滚
+// 重写打字机气泡：先记 near + 保存 <details> open 态；innerHTML 替换后恢复 open；仅当原先贴底才滚
 function rewriteDraftBubble(r, visible) {
   const wasNear = isNearBottom();
   const openIdx = [];
-  // 保存 badge（会被 innerHTML 覆盖）
-  const oldBadge = r.draftEl ? r.draftEl.querySelector(':scope > .task-elapsed') : null;
-  const badgeText = oldBadge ? oldBadge.textContent : null;
   if (r.draftEl) {
     r.draftEl.querySelectorAll('details').forEach((d, i) => { if (d.open) openIdx.push(i); });
   }
@@ -1446,14 +1126,6 @@ function rewriteDraftBubble(r, visible) {
   postRenderEnhance(r.draftEl.querySelector('.bubble'));
   const dets = r.draftEl.querySelectorAll('details');
   openIdx.forEach(i => { if (dets[i]) dets[i].open = true; });
-  // 恢复 badge
-  if (badgeText) {
-    const badge = document.createElement('div');
-    badge.className = 'task-elapsed';
-    badge.textContent = badgeText;
-    badge.dataset.live = '1';
-    r.draftEl.prepend(badge);
-  }
   if (wasNear) scrollBottom(true);
 }
 
@@ -1472,77 +1144,11 @@ function statusLabel() {
   return state.bridgeReady ? t('status.ready') : t('status.disconnected');
 }
 function refreshStatusLabel() { runLabel.textContent = statusLabel(); }
-
-/* ═══════════════ 消息计时 ═══════════════ */
-function formatTaskElapsed(ms) {
-  const v = Number(ms);
-  if (!Number.isFinite(v) || v < 0) return '';
-  const sec = Math.round(v / 1000);
-  if (sec < 60) return t('timing.elapsed').replace('{t}', `${Math.max(1, sec)}s`);
-  const min = Math.floor(sec / 60), s = sec % 60;
-  if (min < 60) return t('timing.elapsed').replace('{t}', `${min}m ${s}s`);
-  const hr = Math.floor(min / 60), m = min % 60;
-  return t('timing.elapsed').replace('{t}', `${hr}h ${m}m`);
-}
-
-function ensureTaskElapsedBadge(wrap, startedAt, endedAt) {
-  if (!wrap || !startedAt) return null;
-  let badge = wrap.querySelector(':scope > .task-elapsed');
-  if (!badge) {
-    badge = document.createElement('div');
-    badge.className = 'task-elapsed';
-    wrap.prepend(badge);
-  }
-  const elapsed = (endedAt || Date.now()) - startedAt;
-  badge.textContent = formatTaskElapsed(elapsed);
-  badge.dataset.live = endedAt ? '' : '1';
-  return badge;
-}
-
-function startTaskTimer(sess) {
-  const r = rt(sess);
-  if (r.taskStartedAt) return;  // 已在计时，不重置
-  // 优先从消息时间戳恢复（刷新后持久化）
-  const msgs = sess.messages;
-  let restored = 0;
-  if (msgs && msgs.length) {
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === 'user' && msgs[i].ts) { restored = msgs[i].ts * 1000; break; }
-    }
-  }
-  r.taskStartedAt = restored || Date.now();
-  r.taskEndedAt = null;
-  if (r.taskTimerId) clearInterval(r.taskTimerId);
-  r.taskTimerId = setInterval(() => {
-    if (!r.taskStartedAt) return;
-    const el = r.draftEl || document.querySelector('.msg-list .msg.assistant:last-child');
-    if (el) ensureTaskElapsedBadge(el, r.taskStartedAt, null);
-    // 更新左上角状态栏显示实时耗时
-    if (isActive(sess)) {
-      const elapsed = Date.now() - r.taskStartedAt;
-      runLabel.textContent = formatTaskElapsed(elapsed);
-    }
-  }, 1000);
-}
-
-function stopTaskTimer(sess) {
-  const r = rt(sess);
-  if (r.taskTimerId) { clearInterval(r.taskTimerId); r.taskTimerId = null; }
-  if (!r.taskStartedAt) return;
-  r.taskEndedAt = Date.now();
-}
-
 function setBusy(sess, busy) {
   const r = rt(sess); r.busy = busy;
-  if (busy) startTaskTimer(sess); else stopTaskTimer(sess);
   if (!isActive(sess)) return;
   runToggle.classList.toggle('busy', busy);
-  if (busy) {
-    const elapsed = Date.now() - (r.taskStartedAt || Date.now());
-    runLabel.textContent = formatTaskElapsed(elapsed);
-  } else {
-    runLabel.textContent = state.bridgeReady ? t('status.ready') : t('status.disconnected');
-  }
+  runLabel.textContent = busy ? t('status.running') : (state.bridgeReady ? t('status.ready') : t('status.disconnected'));
   if (sendBtn) {
     sendBtn.classList.toggle('is-stop', busy);
     sendBtn.setAttribute('aria-label', busy ? t('act.stop') : t('act.send'));
@@ -1553,18 +1159,15 @@ function setBusy(sess, busy) {
 
 /* ═══════════════ 会话 ═══════════════ */
 function isUntitled(x) { return !x || /^(new chat|新对话|新会话)$/i.test(String(x).trim()); }
-function sortedSessions() {
-  // display order: pinned first, then most-recently-active. [0] is the topmost.
-  return [...state.sessions.values()].sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
-    return (b.lastActiveTs || 0) - (a.lastActiveTs || 0);
-  });
-}
 function renderSessionList() {
   convListEl.innerHTML = '';
   const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
-  const all = sortedSessions();
+  const all = [...state.sessions.values()]
+    .sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return (b.lastActiveTs || 0) - (a.lastActiveTs || 0);
+    });
   const filtered = query
     ? all.filter(s => {
         const title = (s.title || '').toLowerCase();
@@ -1581,7 +1184,7 @@ function renderSessionList() {
     const r = state.runtime.get(sess.id);
     const busy = !!(r && r.busy);
     const item = document.createElement('div');
-    item.className = 'conv-item' + (currentPage === 'chat' && sess.id === state.activeId ? ' active' : '') + (busy ? '' : ' idle');
+    item.className = 'conv-item' + (sess.id === state.activeId ? ' active' : '') + (busy ? '' : ' idle');
     item.dataset.id = sess.id;
     const pinSvg = sess.pinned ? GA_ICON('pushPinSimple', 'ci-pin') : '';
     item.innerHTML =
@@ -1604,13 +1207,8 @@ async function newSession() {
   const localId = 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2);
   const sess = { id: localId, bridgeSessionId: null, title: t('conv.defaultTitle'), messages: [], untitled: true, lastActiveTs: Date.now() };
   state.sessions.set(localId, sess);
-  try {
-    await ensureBridgeSession(sess);
-    state.sessions.delete(localId);
-    sess.id = sess.bridgeSessionId;
-    state.sessions.set(sess.id, sess);
-  } catch (e) { showError(t('err.newSession') + ': ' + (e.message || e)); }
-  setActiveSession(sess.id);
+  try { await ensureBridgeSession(sess); } catch (e) { showError(t('err.newSession') + ': ' + (e.message || e)); }
+  setActiveSession(localId);
   saveSessions();
   renderSessionList();
 }
@@ -1623,6 +1221,7 @@ function setActiveSession(id) {
   renderAllMessages(sess);
   setBusy(sess, rt(sess).busy);
   renderSessionList();
+  localStorage.setItem(STORE.activeId, id);
   if (sess.bridgeSessionId && !sess.messages.length && state.bridgeReady) {
     pollSession(sess);
   }
@@ -1635,7 +1234,7 @@ async function closeSession(id) {
   }
   state.sessions.delete(id); state.runtime.delete(id);
   if (state.activeId === id) {
-    const next = (sortedSessions()[0] || {}).id || null;  // 切到列表最靠上的会话
+    const next = state.sessions.keys().next().value || null;
     if (next) setActiveSession(next);
     else { state.activeId = null; if (msgsEl) msgsEl.innerHTML = ''; refreshEmptyState(null); refreshStatusLabel(); }
   }
@@ -1691,7 +1290,6 @@ convMenu.addEventListener('click', (e) => {
       state.sessions = m;
     }
     saveSessions();
-    patchSession(sess, { pinned: sess.pinned });
     renderSessionList();
   } else if (sess && act === 'del') {
     closeSession(sess.id);
@@ -1708,7 +1306,6 @@ function normalize(m) {
   if (m.stopped) o.stopped = true;
   if (m.images) o.images = m.images;
   if (m.files) o.files = m.files;
-  if (m.ts) o.ts = m.ts;
   return o;
 }
 function upsert(sess, raw, partial) {
@@ -1744,11 +1341,6 @@ async function pollSession(sess) {
     setBusy(sess, false);
   } finally {
     r.polling = false; renderSessionList();
-    // 历史消息已全部加载，恢复已完成任务的耗时 badge
-    if (isActive(sess)) {
-      restoreElapsedBadges(sess, ensureMsgs());
-      syncAskUserUi();
-    }
     tokPollBridge();
   }
 }
@@ -1756,9 +1348,8 @@ async function pollSession(sess) {
 function removeUsedPendingFiles(usedFiles) {
   if (!usedFiles.length) return;
   const usedSids = new Set(usedFiles.map(f => f.sid));
-  const touched = new Set(usedFiles.map(f => fileCtx(f)));
   state.pendingFiles = state.pendingFiles.filter(f => !usedSids.has(f.sid));
-  touched.forEach(ctx => renderThumbStrip(ctx));
+  renderThumbStrip();
 }
 
 function clearDraft(sess) {
@@ -1835,13 +1426,14 @@ async function sendPrompt(text) {
   }
   const planPrefix = state.planMode ? t('presetPrompt.planMode') : '';
   const autoPrefix = state.autoMode ? t('presetPrompt.autoMode') : '';
-  const composedPrompt = [planPrefix, autoPrefix, expandFilePlaceholders(text)]
+  const expandedText = expandFilePlaceholders(text);
+  const composedPrompt = [planPrefix, autoPrefix, expandedText]
     .map(s => (s || '').trim())
     .filter(Boolean)
     .join('\n\n');
   const usedFiles = collectUsedFiles(text);
-  const userMsg = { role: 'user', content: text, ts: Date.now() / 1000 };
-  const previewImgs = usedFiles.filter(f => f.isImage).map(f => ({ id: 'f-' + f.sid, name: f.name, path: f.path, dataUrl: f.dataUrl || '' }));
+  const userMsg = { role: 'user', content: text };
+  const previewImgs = usedFiles.filter(f => f.isImage && f.dataUrl).map(f => ({ id: 'f-' + f.sid, dataUrl: f.dataUrl }));
   if (previewImgs.length) userMsg.images = previewImgs;
   const previewFiles = usedFiles.filter(f => !f.isImage).map(f => ({ id: 'f-' + f.sid, name: f.name, path: f.path }));
   if (previewFiles.length) userMsg.files = previewFiles;
@@ -1851,7 +1443,6 @@ async function sendPrompt(text) {
     const titleText = stripAttachPlaceholders(text) || text;
     sess.title = titleText.slice(0, 40) + (titleText.length > 40 ? '…' : '');
     sess.untitled = false; renderSessionList();
-    patchSession(sess, { title: sess.title });
   }
   saveSessions();
   setBusy(sess, true);
@@ -1863,14 +1454,10 @@ async function sendPrompt(text) {
       if (/not found/i.test(restoreErr.message || '')) {
         sess.bridgeSessionId = null;
         sid = await ensureBridgeSession(sess);
-        state.sessions.delete(sess.id);
-        sess.id = sess.bridgeSessionId;
-        state.sessions.set(sess.id, sess);
-        state.activeId = sess.id;
+        saveSessions();
       }
     }
-    const res = await window.ga.rpc('session/prompt', { sessionId: sid, prompt: composedPrompt, display: text, llmNo: state.llmNo,
-      files: previewFiles, imageMetas: previewImgs.map(im => ({ name: im.name, path: im.path })) });
+    const res = await window.ga.rpc('session/prompt', { sessionId: sid, prompt: composedPrompt, display: text, llmNo: state.llmNo });
     if (res?.error) throw new Error(res.error.message || res.error);
     removeUsedPendingFiles(usedFiles);
     const uid = Number(res.userMessageId || res.result?.userMessageId || 0);
@@ -1916,7 +1503,6 @@ async function submitInput() {
   } finally {
     _submitInFlight = false;
     setComposerLocked(false);
-    syncAskUserUi();
   }
 }
 sendBtn.addEventListener('click', (e) => {
@@ -1974,8 +1560,6 @@ document.querySelectorAll('.feature-grid').forEach(grid => {
       return;
     }
     if (!key) { inputEl.focus(); closeModals(); return; }
-    const bp = BUILTIN_PRESETS.find(p => p.key === key);
-    if (bp?.navigate) { closeModals(); gaGoPage(bp.navigate); window.collabFocus?.(); return; }
     const prompt = I18N[lang]['presetPrompt.' + key] || I18N.zh['presetPrompt.' + key];
     closeModals();
     if (prompt) sendPrompt(prompt);
@@ -2284,72 +1868,6 @@ const imgInput = document.getElementById('img-input');
 const thumbStrip = document.getElementById('thumb-strip');
 const uploadBtn = document.getElementById('upload-btn');
 const chatPanel = document.querySelector('main.main');
-let activeFileComposer = 'chat';
-
-function fileCtx(f) { return f.ctx || 'chat'; }
-function filesForCtx(ctx) { return state.pendingFiles.filter(f => fileCtx(f) === ctx); }
-
-function composerCfg(ctx = activeFileComposer) {
-  if (ctx === 'collab') {
-    return {
-      input: document.getElementById('collab-input'),
-      strip: document.getElementById('collab-thumb-strip'),
-      uploadBtn: document.getElementById('collab-upload-btn'),
-      imgInput: document.getElementById('collab-img-input'),
-      dropZone: document.querySelector('.collab-chat'),
-    };
-  }
-  return { input: inputEl, strip: thumbStrip, uploadBtn, imgInput, dropZone: chatPanel };
-}
-
-function renderThumbStrip(ctx = activeFileComposer) {
-  const cfg = composerCfg(ctx);
-  if (!cfg.strip) return;
-  const files = filesForCtx(ctx);
-  if (files.length === 0) {
-    cfg.strip.innerHTML = '';
-    cfg.strip.hidden = true;
-    return;
-  }
-  cfg.strip.innerHTML = files.map(f => {
-    if (f.isImage && f.dataUrl) {
-      return `<div class="thumb" data-sid="${f.sid}"><img src="${f.dataUrl}"><button class="x" data-sid="${f.sid}" data-i18n-title="upload.removeTitle" title="">×</button></div>`;
-    }
-    const name = f.name || 'file';
-    const label = name.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-    const sub = fileSubLabel(name).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-    const path = (f.path || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-    const dataName = name.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-    return `<div class="file-chip pending" data-sid="${f.sid}" data-path="${path}" data-name="${dataName}"><span class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="fc-meta"><span class="fc-name">${label}</span><span class="fc-sub">${sub}</span></span><button class="x" data-sid="${f.sid}" data-i18n-title="upload.removeTitle" title="">×</button></div>`;
-  }).join('');
-  cfg.strip.hidden = false;
-  applyI18n();
-}
-
-function insertPlaceholderInComposer(marker, ctx = activeFileComposer) {
-  const input = composerCfg(ctx).input;
-  if (!input) return;
-  const start = input.selectionStart ?? input.value.length;
-  const end = input.selectionEnd ?? input.value.length;
-  const before = input.value.slice(0, start);
-  const after = input.value.slice(end);
-  const needSpace = before && !/\s$/.test(before);
-  const insertion = (needSpace ? ' ' : '') + marker + ' ';
-  input.value = before + insertion + after;
-  const caret = (before + insertion).length;
-  input.setSelectionRange(caret, caret);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-  input.focus();
-}
-
-function removePlaceholderFromComposer(file) {
-  const input = composerCfg(fileCtx(file)).input;
-  if (!input) return;
-  const marker = placeholderFor(file);
-  const re = new RegExp('\\s?' + marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s?', '');
-  input.value = input.value.replace(re, ' ').replace(/  +/g, ' ').trim();
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-}
 
 function isImageFile(f) {
   return (f && (f.type || '').startsWith('image/')) || IMG_EXT_RE.test(f?.name || '');
@@ -2357,6 +1875,50 @@ function isImageFile(f) {
 
 function placeholderFor(file) {
   return file.isImage ? `[Image #${file.sid}]` : `[File #${file.sid}]`;
+}
+
+function renderThumbStrip() {
+  if (!thumbStrip) return;
+  if (state.pendingFiles.length === 0) {
+    thumbStrip.innerHTML = '';
+    thumbStrip.hidden = true;
+    return;
+  }
+  thumbStrip.innerHTML = state.pendingFiles.map(f => {
+    if (f.isImage && f.dataUrl) {
+      return `<div class="thumb" data-sid="${f.sid}"><img src="${f.dataUrl}"><button class="x" data-sid="${f.sid}" data-i18n-title="upload.removeTitle" title="">×</button></div>`;
+    }
+    const name = f.name || 'file';
+    const label = name.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+    const sub = fileSubLabel(name).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+    const path = (f.path || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+    return `<div class="file-chip pending" data-sid="${f.sid}" data-path="${path}"><span class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="fc-meta"><span class="fc-name">${label}</span><span class="fc-sub">${sub}</span></span><button class="x" data-sid="${f.sid}" data-i18n-title="upload.removeTitle" title="">×</button></div>`;
+  }).join('');
+  thumbStrip.hidden = false;
+  applyI18n();
+}
+
+function insertPlaceholderInComposer(marker) {
+  if (!inputEl) return;
+  const start = inputEl.selectionStart ?? inputEl.value.length;
+  const end = inputEl.selectionEnd ?? inputEl.value.length;
+  const before = inputEl.value.slice(0, start);
+  const after = inputEl.value.slice(end);
+  const needSpace = before && !/\s$/.test(before);
+  const insertion = (needSpace ? ' ' : '') + marker + ' ';
+  inputEl.value = before + insertion + after;
+  const caret = (before + insertion).length;
+  inputEl.setSelectionRange(caret, caret);
+  inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+  inputEl.focus();
+}
+
+function removePlaceholderFromComposer(file) {
+  if (!inputEl) return;
+  const marker = placeholderFor(file);
+  const re = new RegExp('\\s?' + marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s?', '');
+  inputEl.value = inputEl.value.replace(re, ' ').replace(/  +/g, ' ').trim();
+  inputEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function expandFilePlaceholders(text) {
@@ -2376,11 +1938,11 @@ function collectUsedFiles(text) {
   return used;
 }
 
-async function uploadOne(name, dataUrl, sid) {
+async function uploadOne(name, dataUrl) {
   const res = await fetch(`http://${location.hostname}:14168/upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, dataUrl, sid: sid || '' }),
+    body: JSON.stringify({ name, dataUrl }),
   });
   const j = await res.json();
   if (!j.ok) throw new Error(j.error || 'upload failed');
@@ -2404,16 +1966,6 @@ async function addFiles(fileList) {
     if (skipped) showChanToast(t('upload.tooLarge'), '', 'err');
     return;
   }
-  const ctx = activeFileComposer;
-  let uploadSid = '';
-  if (ctx === 'collab') {
-    uploadSid = 'collab';
-  } else {
-    let upSess = activeSess();
-    if (!upSess) { await newSession(); upSess = activeSess(); }
-    if (upSess && !upSess.bridgeSessionId) { try { await ensureBridgeSession(upSess); } catch (_) {} }
-    uploadSid = (upSess && upSess.bridgeSessionId) || '';
-  }
   for (const f of accepted) {
     try {
       const dataUrl = await new Promise((resolve, reject) => {
@@ -2422,18 +1974,17 @@ async function addFiles(fileList) {
         r.onerror = () => reject(r.error);
         r.readAsDataURL(f);
       });
-      const path = await uploadOne(f.name || 'file', dataUrl, uploadSid);
+      const path = await uploadOne(f.name || 'file', dataUrl);
       state.fileSeq += 1;
       const sid = state.fileSeq;
       const isImage = isImageFile(f);
       const entry = {
         sid, name: f.name || 'file', isImage, path,
         dataUrl: isImage ? dataUrl : '',
-        ctx,
       };
       state.pendingFiles.push(entry);
-      insertPlaceholderInComposer(placeholderFor(entry), ctx);
-      renderThumbStrip(ctx);
+      insertPlaceholderInComposer(placeholderFor(entry));
+      renderThumbStrip();
     } catch (e) {
       showChanToast(t('upload.failed'), e.message || String(e), 'err');
     }
@@ -2441,16 +1992,26 @@ async function addFiles(fileList) {
   if (skipped) showChanToast(t('upload.tooLarge'), '', 'err');
 }
 
-function handleThumbStripClick(e, ctx) {
+if (uploadBtn && imgInput) uploadBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  imgInput.click();
+});
+
+if (imgInput) imgInput.addEventListener('change', () => {
+  addFiles(imgInput.files);
+  imgInput.value = '';
+});
+
+if (thumbStrip) thumbStrip.addEventListener('click', (e) => {
   const x = e.target.closest('.x');
   if (x) {
     const sid = Number(x.dataset.sid);
-    const idx = state.pendingFiles.findIndex(f => f.sid === sid && fileCtx(f) === ctx);
+    const idx = state.pendingFiles.findIndex(f => f.sid === sid);
     if (idx >= 0) {
       const removed = state.pendingFiles[idx];
       state.pendingFiles.splice(idx, 1);
       removePlaceholderFromComposer(removed);
-      renderThumbStrip(ctx);
+      renderThumbStrip();
       if (removed.path) {
         fetch(`http://${location.hostname}:14168/upload`, {
           method: 'DELETE',
@@ -2464,31 +2025,56 @@ function handleThumbStripClick(e, ctx) {
   const fileChip = e.target.closest('.file-chip.pending');
   if (fileChip) {
     const path = fileChip.getAttribute('data-path');
-    const name = fileChip.getAttribute('data-name');
-    if (path) openUploadFile(path, name);
+    if (path) openUploadFile(path);
     return;
   }
   const img = e.target.closest('img');
   if (img && img.src) openLightbox(img.src);
+});
+
+/* ─── drag & drop on chat panel ─── */
+if (chatPanel) {
+  let dragDepth = 0;
+  const hasFiles = (e) => {
+    const types = e.dataTransfer && e.dataTransfer.types;
+    if (!types) return false;
+    for (let i = 0; i < types.length; i += 1) {
+      if (types[i] === 'Files') return true;
+    }
+    return false;
+  };
+  // Prevent the browser from opening dropped files outside chatPanel.
+  window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener('drop',     (e) => { if (hasFiles(e)) e.preventDefault(); });
+  chatPanel.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth += 1;
+    chatPanel.classList.add('dragover');
+    chatPanel.dataset.dropHint = t('upload.dropHint');
+  });
+  chatPanel.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  chatPanel.addEventListener('dragleave', (e) => {
+    if (!hasFiles(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) chatPanel.classList.remove('dragover');
+  });
+  chatPanel.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    chatPanel.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+  });
 }
 
-function bindComposerUpload(ctx) {
-  const cfg = composerCfg(ctx);
-  if (!cfg.uploadBtn || cfg.uploadBtn.dataset.bound) return;
-  cfg.uploadBtn.dataset.bound = '1';
-  cfg.uploadBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    activeFileComposer = ctx;
-    cfg.imgInput?.click();
-  });
-  cfg.imgInput?.addEventListener('change', () => {
-    activeFileComposer = ctx;
-    addFiles(cfg.imgInput.files);
-    cfg.imgInput.value = '';
-  });
-  cfg.strip?.addEventListener('click', (e) => handleThumbStripClick(e, ctx));
-  cfg.input?.addEventListener('paste', (e) => {
-    activeFileComposer = ctx;
+/* ─── paste file/image into composer ─── */
+if (inputEl) {
+  inputEl.addEventListener('paste', (e) => {
     const items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
     const files = [];
@@ -2502,66 +2088,6 @@ function bindComposerUpload(ctx) {
     e.preventDefault();
     addFiles(files);
   });
-  const zone = cfg.dropZone;
-  if (!zone || zone.dataset.dropBound) return;
-  zone.dataset.dropBound = '1';
-  let dragDepth = 0;
-  const hasFiles = (e) => {
-    const types = e.dataTransfer && e.dataTransfer.types;
-    if (!types) return false;
-    for (let i = 0; i < types.length; i += 1) {
-      if (types[i] === 'Files') return true;
-    }
-    return false;
-  };
-  zone.addEventListener('dragenter', (e) => {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    activeFileComposer = ctx;
-    dragDepth += 1;
-    zone.classList.add('dragover');
-    zone.dataset.dropHint = t('upload.dropHint');
-  });
-  zone.addEventListener('dragover', (e) => {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    activeFileComposer = ctx;
-    e.dataTransfer.dropEffect = 'copy';
-  });
-  zone.addEventListener('dragleave', (e) => {
-    if (!hasFiles(e)) return;
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0) zone.classList.remove('dragover');
-  });
-  zone.addEventListener('drop', (e) => {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    dragDepth = 0;
-    zone.classList.remove('dragover');
-    activeFileComposer = ctx;
-    addFiles(e.dataTransfer.files);
-  });
-}
-
-bindComposerUpload('chat');
-bindComposerUpload('collab');
-
-Object.assign(window, {
-  gaSetActiveFileComposer: ctx => { activeFileComposer = ctx === 'collab' ? 'collab' : 'chat'; },
-  gaExpandFilePlaceholders: expandFilePlaceholders,
-  gaCollectUsedFiles: collectUsedFiles,
-  gaClearUsedPendingFiles: text => removeUsedPendingFiles(collectUsedFiles(text)),
-  gaFileSubLabel: fileSubLabel,
-});
-
-if (chatPanel) {
-  const blockFileDrop = e => {
-    const types = e.dataTransfer?.types;
-    if (!types) return;
-    for (let i = 0; i < types.length; i += 1) if (types[i] === 'Files') { e.preventDefault(); return; }
-  };
-  window.addEventListener('dragover', blockFileDrop);
-  window.addEventListener('drop', blockFileDrop);
 }
 
 /* ═══════════════ bridge 事件 ═══════════════ */
@@ -2602,8 +2128,7 @@ const tokTodayN = document.getElementById('tok-today-n');
 const tokCostN = document.getElementById('tok-cost-n');
 const TOK_PER_PAGE = 15;
 let _tokPage = 0;
-let _tokHistory = [];
-let _tokLastSnap = {};
+const TOK_STORE_KEY = 'ga_token_history';
 
 // Model price table: $/M tokens [input, output]
 const MODEL_PRICES = {
@@ -2643,25 +2168,17 @@ function modelPriceTip(model) {
   return lines.join('\n');
 }
 
-function tokLoadHistory() { return _tokHistory; }
-function tokSaveHistory(h) {
-  _tokHistory = h;
-  fetch(`http://${location.hostname}:14168/token-history`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({history:h, snap:_tokLastSnap})
-  }).catch(()=>{});
-}
+function tokLoadHistory() { try { return JSON.parse(localStorage.getItem(TOK_STORE_KEY)||'[]'); } catch(_) { return []; } }
+function tokSaveHistory(h) { localStorage.setItem(TOK_STORE_KEY, JSON.stringify(h)); }
 
+// Poll bridge and snapshot deltas into localStorage
+const TOK_SNAP_KEY = 'ga_token_snap';
+let _tokLastSnap = (() => { try { return JSON.parse(localStorage.getItem(TOK_SNAP_KEY)||'{}'); } catch(_) { return {}; } })();
 let _tokPolling = false;
 async function tokPollBridge() {
   if (_tokPolling) return;
   _tokPolling = true;
   try {
-    if (!_tokHistory.length) {
-      const stored = await bridgeFetch('/token-history');
-      if (stored.history?.length) _tokHistory = stored.history;
-      if (stored.snap) _tokLastSnap = stored.snap;
-    }
     const data = await bridgeFetch('/token-stats');
     const history = tokLoadHistory();
     for (const r of (data.records||[])) {
@@ -2678,6 +2195,7 @@ async function tokPollBridge() {
       }
       _tokLastSnap[key] = {input:r.input, output:r.output, cacheCreate:r.cacheCreate, cacheRead:r.cacheRead};
     }
+    localStorage.setItem(TOK_SNAP_KEY, JSON.stringify(_tokLastSnap));
     tokSaveHistory(history);
   } catch(_) {}
   _tokPolling = false;
@@ -2709,8 +2227,7 @@ function tokRenderTable(records) {
     const k=r.sessionId||'?';
     let title = r.title||k;
     if(!title||title===k){ const ss=[...state.sessions.values()].find(s=>s.bridgeSessionId===k); if(ss)title=ss.title; }
-    const deleted = ![...state.sessions.values()].some(s=>s.bridgeSessionId===k);
-    if(!bySession.has(k)) bySession.set(k,{title:title,deleted:deleted,input:0,output:0,cacheCreate:0,cacheRead:0,lastTs:0,prompts:[]});
+    if(!bySession.has(k)) bySession.set(k,{title:title,input:0,output:0,cacheCreate:0,cacheRead:0,lastTs:0,prompts:[]});
     const s=bySession.get(k); s.input+=r.input||0; s.output+=r.output||0; s.cacheCreate+=r.cacheCreate||0; s.cacheRead+=r.cacheRead||0;
     if(r.ts>s.lastTs){s.lastTs=r.ts; s.title=r.title||s.title;} s.prompts.push(r);
   }
@@ -2723,7 +2240,7 @@ function tokRenderTable(records) {
   for(const s of pageItems){
     let sc=0; s.prompts.forEach(p=>{sc+=parseFloat(estCost(p.input||0,p.output||0,p.model,p.cacheRead||0,p.cacheCreate||0));});
     const tr=document.createElement('tr'); tr.className='tok-row-session';
-    tr.innerHTML=`<td>${escapeHtml(s.title)}${s.deleted?'<span class="tok-deleted">'+t('tok.deleted')+'</span>':''}</td><td>${fmtTok(s.input)}</td><td>${fmtTok(s.output)}</td><td>${fmtTok(s.cacheCreate)}</td><td>${fmtTok(s.cacheRead)}</td><td>¥${sc.toFixed(2)}</td>`;
+    tr.innerHTML=`<td>${escapeHtml(s.title)}</td><td>${fmtTok(s.input)}</td><td>${fmtTok(s.output)}</td><td>${fmtTok(s.cacheCreate)}</td><td>${fmtTok(s.cacheRead)}</td><td>¥${sc.toFixed(2)}</td>`;
     tokTbody.appendChild(tr);
     const details=[]; s.prompts.sort((a,b)=>b.ts-a.ts);
     for(const p of s.prompts){
@@ -2748,8 +2265,6 @@ const CP_KEY = 'ga_custom_presets';
 const HB_KEY = 'ga_hidden_builtins';
 
 const BUILTIN_PRESETS = [
-  { key: 'butler', titleKey: 'preset.butler.t', descKey: 'preset.butler.d', navigate: 'collab',
-    iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
   { key: 'goal',    titleKey: 'preset.goal.t',    descKey: 'preset.goal.d',    promptKey: 'presetPrompt.goal',
     iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></svg>' },
   { key: 'explore', titleKey: 'preset.explore.t', descKey: 'preset.explore.d', promptKey: 'presetPrompt.explore',
@@ -2935,58 +2450,23 @@ if (msgArea) {
     const fileChip = e.target.closest('.user-files .file-chip');
     if (fileChip) {
       const path = fileChip.getAttribute('data-path');
-      const name = fileChip.getAttribute('data-name');
-      if (path) openUploadFile(path, name);
+      if (path) openUploadFile(path);
     }
   });
 }
 
-function uploadRawUrl(path, download) {
-  return `http://${location.hostname}:14168/upload/raw?path=${encodeURIComponent(path || '')}${download ? '&download=1' : ''}`;
-}
-function bridgeIsLocal() {
-  return location.hostname === '127.0.0.1' || location.hostname === 'localhost';
-}
-async function openUploadFile(path, name) {
-  // 远程访问：浏览器无法调起 bridge 那台/本机的系统程序，降级为下载到本机
-  if (!bridgeIsLocal()) {
-    const a = document.createElement('a');
-    a.href = uploadRawUrl(path, true);
-    a.download = name || '';
-    document.body.appendChild(a); a.click(); a.remove();
-    return;
-  }
-  // 本地：bridge 与你同机，调系统默认程序打开 / 在文件夹显示
-  const mode = isPreviewableByName(name || path) ? 'open' : 'reveal';
+async function openUploadFile(path) {
   try {
     const res = await fetch(`http://${location.hostname}:14168/path/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'upload', path, mode }),
+      body: JSON.stringify({ kind: 'upload', path }),
     });
     const j = await res.json();
     if (!j.ok) throw new Error(j.error || 'open failed');
   } catch (e) {
     showChanToast(t('file.openFailed'), e.message || String(e), 'err');
   }
-}
-
-const PREVIEWABLE_EXTS = new Set([
-  'pdf',
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff',
-  'txt', 'md', 'log', 'json', 'yaml', 'yml', 'xml', 'csv', 'tsv', 'ini', 'toml', 'env', 'rtf',
-  'py', 'js', 'ts', 'tsx', 'jsx', 'java', 'c', 'cpp', 'h', 'hpp', 'rs', 'go', 'rb', 'php', 'sh', 'bash', 'zsh', 'fish', 'lua', 'pl', 'r', 'scala', 'kt', 'swift',
-  'html', 'htm', 'css', 'scss', 'sass', 'less', 'vue', 'svelte', 'sql',
-  'doc', 'docx', 'pages', 'odt',
-  'xls', 'xlsx', 'numbers', 'ods',
-  'ppt', 'pptx', 'key', 'odp',
-  'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a',
-  'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv',
-]);
-function isPreviewableByName(name) {
-  const m = String(name || '').match(/\.([^./\\]+)$/);
-  if (!m) return false;
-  return PREVIEWABLE_EXTS.has(m[1].toLowerCase());
 }
 
 /* ═══════════════ 消息通道（复用 gaServiceStore + WS 同步） ═══════════════ */
@@ -3319,8 +2799,7 @@ if (chanListEl) {
 }
 
 /* ═══════════════ 启动 ═══════════════ */
-(async () => {
-await loadSessions();
+loadSessions();
 applyAppearance(appearance, plainUi, { persist: false });
 applyTheme(theme, { persist: false });
 initChatFontStepper();
@@ -3343,371 +2822,3 @@ if (state.activeId) setActiveSession(state.activeId);
 else refreshEmptyState(null);
 runLabel.textContent = t('status.connecting');
 window.ga.startBridge && window.ga.startBridge();
-})();
-
-/* Conductor 页 — 直连 Conductor WS，不走 bridge session */
-(function () {
-  'use strict';
-  const wsUrl = () => `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8900/ws`;
-  const FAIL_MAX = 5, RECON_BASE = 1200, RECON_MAX = 30000;
-  const $ = id => document.getElementById(id);
-  const t = k => (window.gaT && window.gaT(k)) || k;
-  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const md = s => { try { return typeof marked !== 'undefined' ? marked.parse(s || '') : esc(s); } catch { return esc(s); } };
-  const stripAttach = text => String(text || '').replace(/\[(Image|File)\s+#\d+\]\s*/g, '').trim();
-  const FC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-  const ST_ICONS = {
-    running: '<span class="collab-st-ic collab-st-ic--spin" aria-hidden="true"></span>',
-    reported: '<span class="collab-st-ic collab-st-ic--ok" aria-hidden="true">✓</span>',
-    paused: '<span class="collab-st-ic collab-st-ic--pause" aria-hidden="true">⏸</span>',
-    failed: '<span class="collab-st-ic collab-st-ic--warn" aria-hidden="true">!</span>',
-    terminated: '<span class="collab-st-ic collab-st-ic--off" aria-hidden="true">×</span>',
-  };
-  const ST_KEYS = { running: 'collab.stRunning', reported: 'collab.stReported', paused: 'collab.stPaused', failed: 'collab.stFailed', terminated: 'collab.stTerminated' };
-  const CHIP_KEYS = ['collab.chipProgress', 'collab.chipPause', 'collab.chipSummary'];
-
-  const S = {
-    everConnected: false, reconnecting: false, serviceAvailable: false,
-    messages: [], workers: [], runningCount: 0,
-    conductorTyping: false, failCount: 0,
-    historyReady: false, reconnectAt: 0, progressOpen: false,
-  };
-  let ws, connectTimer, reconnectTick, titleSeq = 0, wsGen = 0, localSeq = 0;
-  const titleSeen = new Map();
-
-  let draftEl = null;
-
-  const scrollMsgs = () => { const a = $('collab-msgs'); if (a) a.scrollTop = a.scrollHeight; };
-  const showDraft = () => S.conductorTyping && S.serviceAvailable && S.historyReady && S.messages.length > 0;
-
-  function clearDraft() {
-    if (draftEl) { draftEl.remove(); draftEl = null; }
-  }
-
-  function syncDraft() {
-    const list = $('collab-msg-list');
-    if (!list || list.hidden || !showDraft()) return clearDraft();
-    if (!draftEl) draftEl = document.createElement('div');
-    draftEl.className = 'msg system collab-msg-enter';
-    draftEl.setAttribute('aria-label', t('collab.typing'));
-    draftEl.innerHTML = '<div class="bubble sys"><span class="collab-wait-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>';
-    list.appendChild(draftEl);
-    requestAnimationFrame(scrollMsgs);
-  }
-
-  function relTime(ts) {
-    if (!ts) return '';
-    const ms = typeof ts === 'number' ? (ts > 1e12 ? ts : ts * 1000) : Date.parse(ts);
-    if (!ms || Number.isNaN(ms)) return '';
-    const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-    if (sec < 10) return t('collab.timeJust');
-    if (sec < 60) return t('collab.timeSec').replace('{n}', sec);
-    const min = Math.floor(sec / 60);
-    if (min < 60) return t('collab.timeMin').replace('{n}', min);
-    const hr = Math.floor(min / 60);
-    return hr < 24 ? t('collab.timeHr').replace('{n}', hr) : t('collab.timeDay').replace('{n}', Math.floor(hr / 24));
-  }
-
-  function mapStatus(status, reply) {
-    const r = (reply || '').trim();
-    if (status === 'running') return 'running';
-    if (status === 'failed') return 'failed';
-    if (status === 'aborted') return 'terminated';
-    if (status === 'stopped') return r ? 'reported' : 'paused';
-    return 'paused';
-  }
-
-  function normalizeWorker(raw) {
-    if (!titleSeen.has(raw.id)) titleSeen.set(raw.id, ++titleSeq);
-    const ui = mapStatus(raw.status, raw.reply);
-    let title = String(raw.prompt ?? '').replace(/^[\s请帮我麻烦]+/u, '').trim();
-    if (!title) title = t('collab.taskFallback').replace('{n}', titleSeen.get(raw.id));
-    else {
-      title = (title.split(/[\n。！？.!?]/)[0] || '').trim();
-      if (title.length > 18) title = title.slice(0, 18) + '…';
-    }
-    const reply = String(raw.reply || '').replace(/\s+/g, ' ').trim();
-    let summary = reply ? (reply.length > 80 ? reply.slice(0, 80) + '…' : reply) : t(ui === 'running' ? 'collab.summaryRunning' : 'collab.summaryWait');
-    return { id: raw.id, title, status: ui, summary, fullReply: raw.reply || '', updatedAt: raw.updated_at };
-  }
-
-  function syncProgressToggle() {
-    const btn = $('collab-progress-toggle'), body = $('collab-body');
-    if (!btn || !body) return;
-    const split = body.classList.contains('collab-body--split');
-    btn.hidden = !split;
-    body.classList.toggle('collab-progress-open', split && S.progressOpen);
-  }
-
-  function setConnUi() {
-    const off = $('collab-offline'), recon = $('collab-reconnect'), inp = $('collab-input'), btn = $('collab-send');
-    const avail = S.serviceAvailable;
-    const trying = !avail && !S.everConnected && S.failCount < FAIL_MAX;
-    if (off) off.hidden = avail || S.reconnecting || trying;
-    if (recon) {
-      recon.hidden = !S.reconnecting;
-      recon.textContent = S.reconnecting && S.reconnectAt > Date.now()
-        ? t('collab.reconnect') + ' ' + t('collab.reconnectIn').replace('{n}', Math.ceil((S.reconnectAt - Date.now()) / 1000))
-        : t('collab.reconnect');
-    }
-    if (inp) inp.disabled = !avail;
-    if (btn) btn.disabled = !avail;
-    syncDraft();
-    syncProgressToggle();
-  }
-
-  let cardMenu = null;
-  function hideCardMenu() { if (cardMenu) { cardMenu.remove(); cardMenu = null; } }
-  function showCardMenu(x, y, sid) {
-    hideCardMenu();
-    cardMenu = document.createElement('div');
-    cardMenu.className = 'ctx-menu';
-    cardMenu.style.left = x + 'px';
-    cardMenu.style.top = y + 'px';
-    cardMenu.innerHTML = '<div class="ctx-item danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</div>';
-    cardMenu.querySelector('.ctx-item').onmousedown = (e) => {
-      e.stopPropagation();
-      fetch(`http://${location.hostname}:8900/subagent/${sid}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'kill' }) });
-      hideCardMenu();
-    };
-    document.body.appendChild(cardMenu);
-    setTimeout(() => document.addEventListener('mousedown', hideCardMenu, { once: true }), 0);
-  }
-
-  let drawerEl = null;
-  function closeWorkerDrawer() { if (drawerEl) { drawerEl.remove(); drawerEl = null; } }
-  function openWorkerDrawer(w) {
-    closeWorkerDrawer();
-    drawerEl = document.createElement('div');
-    drawerEl.className = 'collab-drawer-wrap';
-    drawerEl.innerHTML = `<div class="collab-drawer-backdrop"></div><aside class="collab-drawer"><div class="collab-drawer-head"><span class="collab-drawer-title">${esc(w.title)}</span><button class="modal-x collab-drawer-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><div class="collab-drawer-body">${md(w.fullReply || t('collab.summaryWait'))}</div></aside>`;
-    drawerEl.querySelector('.collab-drawer-backdrop').onclick = closeWorkerDrawer;
-    drawerEl.querySelector('.collab-drawer-close').onclick = closeWorkerDrawer;
-    document.body.appendChild(drawerEl);
-  }
-
-  function renderWorkers() {
-    const box = $('collab-workers'), empty = $('collab-progress-empty');
-    if (!box) return;
-    if (empty) empty.hidden = S.workers.length > 0;
-    box.innerHTML = S.workers.map(w => `
-      <article class="collab-card collab-card--${w.status}" data-sid="${esc(w.id)}">
-        <div class="collab-card-st">${ST_ICONS[w.status] || ''}<span class="collab-dot"></span>${esc(t(ST_KEYS[w.status] || 'collab.stPaused'))}${w.updatedAt ? `<span class="collab-card-time">${esc(relTime(w.updatedAt))}</span>` : ''}</div>
-        <div class="collab-card-title">${esc(w.title)}</div>
-        <div class="collab-card-sum">${esc(w.summary)}</div>
-      </article>`).join('');
-    box.querySelectorAll('.collab-card').forEach(el => {
-      el.addEventListener('contextmenu', e => {
-        e.preventDefault();
-        showCardMenu(e.clientX, e.clientY, el.dataset.sid);
-      });
-      el.addEventListener('click', () => {
-        const w = S.workers.find(w => w.id === el.dataset.sid);
-        if (w) openWorkerDrawer(w);
-      });
-    });
-    const running = S.workers.filter(w => w.status === 'running').length;
-    S.runningCount = running;
-    document.dispatchEvent(new CustomEvent('collab:running-count', { detail: { count: running } }));
-    const sticky = $('collab-sticky');
-    if (sticky) { sticky.hidden = !running; sticky.textContent = t('collab.sticky').replace('{n}', running); }
-    const stats = $('collab-progress-stats');
-    if (stats) {
-      const has = S.workers.length > 0;
-      stats.hidden = !has;
-      if (has) stats.textContent = t('collab.progressStats')
-        .replace('{running}', running)
-        .replace('{done}', S.workers.filter(w => w.status === 'reported').length)
-        .replace('{issue}', S.workers.filter(w => w.status === 'failed' || w.status === 'terminated').length);
-    }
-  }
-
-  function renderUserMsg(item) {
-    const sub = n => (window.gaFileSubLabel && window.gaFileSubLabel(n)) || n;
-    const imgs = (item.images || []).map(im => `<img src="${esc(im.dataUrl || '')}" alt="">`).join('');
-    const files = (item.files || []).map(f => {
-      const name = f.name || 'file';
-      return `<div class="file-chip" data-path="${esc(f.path || '')}" data-name="${esc(name)}"><span class="fc-icon">${FC_SVG}</span><span class="fc-meta"><span class="fc-name">${esc(name)}</span><span class="fc-sub">${esc(sub(name))}</span></span></div>`;
-    }).join('');
-    const clean = stripAttach(item.msg);
-    const text = clean ? `<div class="bubble">${esc(clean).replace(/\n/g, '<br>')}</div>` : '';
-    return `<div class="msg user collab-msg-enter"><div class="user-stack">${files ? `<div class="user-files">${files}</div>` : ''}${imgs ? `<div class="user-imgs">${imgs}</div>` : ''}${text}</div></div>`;
-  }
-
-  function renderMsg(item) {
-    if (item.role === 'user') return renderUserMsg(item);
-    if (item.role === 'conductor') return `<div class="msg assistant collab-msg-enter"><div class="bubble md">${md(item.msg)}</div></div>`;
-    return `<div class="msg system collab-msg-enter"><div class="bubble sys">${esc(item.msg)}</div></div>`;
-  }
-
-  function syncLayout() {
-    const body = $('collab-body');
-    if (!body) return;
-    body.classList.toggle('collab-body--split', S.historyReady && S.messages.length > 0);
-    syncProgressToggle();
-  }
-
-  function syncMessages() {
-    const area = $('collab-msgs'), welcome = $('collab-welcome'), list = $('collab-msg-list'), head = $('collab-chat-head');
-    if (!area || !list) return;
-    if (!S.historyReady) {
-      area.classList.remove('has-msgs');
-      if (welcome) welcome.hidden = true;
-      if (head) head.hidden = true;
-      list.hidden = true;
-      return syncLayout();
-    }
-    const has = S.messages.length > 0;
-    area.classList.toggle('has-msgs', has);
-    if (welcome) welcome.hidden = has;
-    if (head) head.hidden = !has;
-    list.hidden = !has;
-    list.innerHTML = S.messages.map(renderMsg).join('');
-    syncDraft();
-    scrollMsgs();
-    syncLayout();
-  }
-
-  function pushMsg(item) {
-    if (item.id && S.messages.some(m => m.id === item.id)) return;
-    if (item.role === 'user') {
-      const plain = stripAttach(item.msg);
-      for (let i = S.messages.length - 1; i >= 0; i--) {
-        const m = S.messages[i];
-        if (m._local && m.role === 'user' && (stripAttach(m.msg) === plain || m.msg === item.msg)) {
-          S.messages.splice(i, 1);
-          break;
-        }
-      }
-    }
-    S.messages.push(item);
-    if (item.role === 'conductor') S.conductorTyping = false;
-    syncMessages();
-    setConnUi();
-  }
-
-  function setWorkers(rawList) {
-    S.workers = (rawList || []).map(normalizeWorker);
-    renderWorkers();
-    syncLayout();
-  }
-
-  function onWsData(data, gen) {
-    if (gen !== wsGen) return;
-    if (data.type === 'hello') {
-      S.historyReady = true;
-      S.messages = (data.chat || []).map(raw => ({ id: raw.id, role: raw.role || 'system', msg: raw.msg || '', ts: raw.ts, read: raw.read }));
-      setWorkers(data.subagents || []);
-      syncMessages();
-      setConnUi();
-    } else if (data.type === 'subagents') setWorkers(data.items || []);
-    else if (data.type === 'chat') pushMsg({ id: data.item.id, role: data.item.role || 'system', msg: data.item.msg || '', ts: data.item.ts, read: data.item.read });
-  }
-
-  function resetWs() {
-    wsGen++;
-    if (!ws) return;
-    const old = ws;
-    ws = null;
-    old.onopen = old.onclose = old.onerror = old.onmessage = null;
-    try { old.close(); } catch {}
-  }
-
-  function scheduleReconnect() {
-    clearTimeout(connectTimer);
-    clearInterval(reconnectTick);
-    if (!S.everConnected && S.failCount >= FAIL_MAX) {
-      S.reconnecting = false;
-      return setConnUi();
-    }
-    const delay = Math.min(RECON_MAX, RECON_BASE * Math.pow(2, Math.max(0, S.failCount - 1)));
-    S.reconnectAt = Date.now() + delay;
-    S.reconnecting = S.everConnected;
-    setConnUi();
-    reconnectTick = setInterval(() => { if (!S.reconnecting) clearInterval(reconnectTick); else setConnUi(); }, 500);
-    connectTimer = setTimeout(connect, delay);
-  }
-
-  function connect() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-    clearTimeout(connectTimer);
-    clearInterval(reconnectTick);
-    const gen = ++wsGen;
-    setConnUi();
-    let sock;
-    try { sock = new WebSocket(wsUrl()); } catch (e) {
-      if (gen !== wsGen) return;
-      S.failCount++;
-      return scheduleReconnect();
-    }
-    ws = sock;
-    sock.onopen = () => {
-      if (gen !== wsGen) return;
-      S.everConnected = true;
-      S.serviceAvailable = true;
-      S.reconnecting = false;
-      S.failCount = 0;
-      setConnUi();
-    };
-    sock.onclose = (ev) => {
-      if (gen !== wsGen) return;
-      S.serviceAvailable = false;
-      if (S.everConnected) S.reconnecting = true;
-      else S.failCount++;
-      setConnUi();
-      scheduleReconnect();
-    };
-    sock.onerror = () => {};
-    sock.onmessage = ev => {
-      if (gen !== wsGen) return;
-      try { onWsData(JSON.parse(ev.data), gen); } catch {}
-    };
-  }
-
-  function sendText(rawText) {
-    const text = (rawText || '').trim();
-    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return false;
-    const expand = window.gaExpandFilePlaceholders || (s => s);
-    const collect = window.gaCollectUsedFiles || (() => []);
-    const clearUsed = window.gaClearUsedPendingFiles || (() => {});
-    const used = collect(text);
-    const images = [], files = [];
-    for (const f of used) (f.isImage ? images : files).push(f.isImage ? { path: f.path, dataUrl: f.dataUrl } : { path: f.path, name: f.name });
-    S.messages.push({ id: `_local_${++localSeq}`, _local: true, role: 'user', msg: text, ts: Date.now() / 1000, images, files });
-    S.conductorTyping = true;
-    syncMessages();
-    ws.send(JSON.stringify({ msg: expand(text) }));
-    clearUsed(text);
-    const inp = $('collab-input');
-    if (inp && inp.value.trim() === text) inp.value = '';
-    setConnUi();
-    return true;
-  }
-
-  function buildChips() {
-    const box = $('collab-chips');
-    if (box) box.innerHTML = CHIP_KEYS.map(k => `<button type="button" class="chip sm collab-chip" data-text-key="${k}">${esc(t(k))}</button>`).join('');
-  }
-
-  $('collab-send')?.addEventListener('click', () => sendText($('collab-input')?.value || ''));
-  $('collab-retry')?.addEventListener('click', () => { S.failCount = 0; S.reconnecting = false; resetWs(); connect(); });
-  $('collab-input')?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(e.target.value); } });
-  $('collab-chips')?.addEventListener('click', e => { const k = e.target.closest('.collab-chip')?.dataset.textKey; if (k) sendText(t(k)); });
-  $('collab-progress-toggle')?.addEventListener('click', () => { S.progressOpen = !S.progressOpen; syncProgressToggle(); });
-  document.querySelector('[data-page="collab"]')?.addEventListener('click', e => {
-    if (!S.progressOpen || e.target.closest('.collab-progress') || e.target.closest('#collab-progress-toggle')) return;
-    S.progressOpen = false;
-    syncProgressToggle();
-  });
-
-  window.collabInit = () => {
-    window.gaSetActiveFileComposer?.('collab');
-    buildChips();
-    syncMessages();
-    setConnUi();
-    renderWorkers();
-    connect();
-  };
-  window.collabFocus = () => $('collab-input')?.focus();
-  window.collabRetranslate = () => { buildChips(); renderWorkers(); syncMessages(); setConnUi(); };
-})();
