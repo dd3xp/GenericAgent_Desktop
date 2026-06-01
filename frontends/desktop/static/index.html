@@ -2,9 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GenericAgent</title>
 <link rel="stylesheet" href="assets/fonts/fonts.css">
 <link rel="stylesheet" href="styles.css?v=92">
+<link rel="stylesheet" href="mobile.css?v=1">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -47,6 +49,21 @@
 </script>
 </head>
 <body>
+<script>
+  /* 手机视口:
+     1) 默认把左右两栏都收起来,中区铺满,行内同步避免首屏闪;
+     2) 注入一个 #mobile-backdrop 真实元素,点空白处关掉所有抽屉
+        —— mobile.css 用它做遮罩(替代以前不响应触摸的 ::before 伪元素)。 */
+  if (matchMedia('(max-width: 768px)').matches) {
+    document.body.classList.add('sb-collapsed', 'rp-collapsed');
+    var __bd = document.createElement('div');
+    __bd.id = 'mobile-backdrop';
+    __bd.addEventListener('click', function () {
+      document.body.classList.add('sb-collapsed', 'rp-collapsed');
+    });
+    document.body.appendChild(__bd);
+  }
+</script>
 
 <div id="app">
 
