@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Generic Agent · 鉴权</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/auth/auth.css">
+</head>
+<body>
+  <div class="auth-card">
+    <div class="brand">Generic <span class="brand-accent">Agent</span></div>
+    <div class="hint" id="hint">…</div>
+
+    <form id="form" autocomplete="off" onsubmit="return false;">
+      <input id="p1" type="password" placeholder="密码" autofocus>
+      <input id="p2" type="password" placeholder="再输入一次确认" hidden>
+      <button id="submit" type="submit" disabled>请稍候…</button>
+    </form>
+
+    <div class="err" id="err"></div>
+    <div class="foot">登录有效期 30 天。密码忘了请联系运维删除 <code>~/.ga_auth/</code> 后重新初始化。</div>
+  </div>
+
+  <script src="/auth/auth.js"></script>
+</body>
+</html>

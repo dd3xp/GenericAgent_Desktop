@@ -11,10 +11,11 @@ def _filtered_print(*args, **kwargs):
     return _original_print(*args, **kwargs)
 builtins.print = _filtered_print
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, PlainTextResponse, JSONResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import FileResponse, PlainTextResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import auth_gate  # 共享鉴权(bcrypt + HMAC cookie),密码/secret 存 ~/.ga_auth/
 
 # allow: python frontends/conductor.py
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,12 +24,95 @@ if ROOT not in sys.path:
 
 from agentmain import GenericAgent
 
-HOST = "127.0.0.1"
-PORT = 8900
+HOST = "127.0.0.1"  # 写在 readme / system prompt 里的 API base —— 保持回环,内部 agent 用
+PORT = int(os.environ.get("CONDUCTOR_PORT", "8900"))
+BIND_HOST = os.environ.get("CONDUCTOR_BIND", HOST)  # uvicorn 真正绑的地址(对外开放就 0.0.0.0)
 HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conductor.html")
+AUTH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "desktop", "static", "auth")
 
 app = FastAPI(title="Conductor")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
+
+
+# ── 鉴权中间件:除了 /auth/* 之外的 HTTP 请求都得带有效 cookie ─────────────────
+@app.middleware("http")
+async def auth_http_middleware(request: Request, call_next):
+    path = request.url.path
+    if auth_gate.is_public_path(path):
+        return await call_next(request)
+    token = request.cookies.get(auth_gate.COOKIE_NAME, "")
+    if auth_gate.verify_token(token):
+        return await call_next(request)
+    accept = (request.headers.get("accept") or "").lower()
+    if request.method == "GET" and ("text/html" in accept or path in ("/", "")):
+        return RedirectResponse(url="/auth", status_code=302)
+    return JSONResponse({"error": "auth_required"}, status_code=401)
+
+
+def _issue_cookie_resp(resp: JSONResponse) -> JSONResponse:
+    token = auth_gate.sign_token()
+    resp.set_cookie(
+        auth_gate.COOKIE_NAME, token,
+        max_age=auth_gate.EXPIRY_SECONDS,
+        path="/", httponly=True, samesite="lax",
+    )
+    return resp
+
+
+@app.get("/auth")
+def auth_page():
+    return FileResponse(os.path.join(AUTH_DIR, "auth.html"),
+                        headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
+@app.get("/auth/auth.html")
+def auth_html(): return FileResponse(os.path.join(AUTH_DIR, "auth.html"))
+
+
+@app.get("/auth/auth.css")
+def auth_css(): return FileResponse(os.path.join(AUTH_DIR, "auth.css"))
+
+
+@app.get("/auth/auth.js")
+def auth_js(): return FileResponse(os.path.join(AUTH_DIR, "auth.js"))
+
+
+@app.get("/auth/status")
+def auth_status():
+    return {"initialized": auth_gate.is_initialized()}
+
+
+class _AuthSetIn(BaseModel):
+    password1: str
+    password2: str
+
+
+@app.post("/auth/set")
+async def auth_set(body: _AuthSetIn):
+    if auth_gate.is_initialized():
+        return JSONResponse({"error": "already_initialized"}, status_code=403)
+    p1, p2 = (body.password1 or "").strip(), (body.password2 or "").strip()
+    if not p1 or p1 != p2:
+        return JSONResponse({"error": "passwords_mismatch"}, status_code=400)
+    if len(p1) < auth_gate.MIN_PASSWORD_LEN:
+        return JSONResponse({"error": "password_too_short"}, status_code=400)
+    try:
+        auth_gate.set_password(p1)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return _issue_cookie_resp(JSONResponse({"ok": True}))
+
+
+class _AuthLoginIn(BaseModel):
+    password: str
+
+
+@app.post("/auth/login")
+async def auth_login(body: _AuthLoginIn):
+    if not auth_gate.verify_password((body.password or "").strip()):
+        return JSONResponse({"error": "invalid"}, status_code=401)
+    return _issue_cookie_resp(JSONResponse({"ok": True}))
+
 
 class ChatIn(BaseModel):
     msg: str
@@ -413,6 +497,11 @@ def api_chat(body: ChatIn):
 
 @app.websocket("/ws")
 async def websocket(ws: WebSocket):
+    # 握手阶段校验 cookie:不通过就直接拒,不进消息循环
+    token = ws.cookies.get(auth_gate.COOKIE_NAME, "") if hasattr(ws, "cookies") else ""
+    if not auth_gate.verify_token(token):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     ws_clients.add(ws)
     try:
@@ -433,4 +522,4 @@ async def websocket(ws: WebSocket):
 if __name__ == "__main__":
     import uvicorn, webbrowser, threading
     threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
-    uvicorn.run("conductor:app", host=HOST, port=PORT, reload=False)
+    uvicorn.run("conductor:app", host=BIND_HOST, port=PORT, reload=False)

@@ -917,6 +917,82 @@ async def cors_middleware(request, handler):
     return resp
 
 
+# ── 鉴权中间件 + 端点(详细见 frontends/auth_gate.py) ──────────────────────
+try:
+    import auth_gate as _auth_gate  # 同目录(frontends/auth_gate.py)
+except ImportError:
+    _auth_gate = None  # 模块缺失时降级:全放行(但日志里大喊),便于排查
+
+
+@web.middleware
+async def auth_middleware(request, handler):
+    if _auth_gate is None:
+        return await handler(request)
+    if _auth_gate.is_public_path(request.path):
+        return await handler(request)
+    token = request.cookies.get(_auth_gate.COOKIE_NAME, "")
+    if _auth_gate.verify_token(token):
+        return await handler(request)
+    # 未鉴权:HTML/根目录请求重定向到 /auth;API/WS 请求返 401 JSON
+    accepts_html = "text/html" in (request.headers.get("Accept", "") or "").lower()
+    if request.method == "GET" and (accepts_html or request.path in ("/", "")):
+        return web.HTTPFound("/auth")
+    return web.json_response({"error": "auth_required"}, status=401, headers=cors_headers())
+
+
+async def auth_page_handler(request):
+    """GET /auth — 返回登录/初始化页面。"""
+    static_dir = APP_DIR / "desktop" / "static"
+    return web.FileResponse(static_dir / "auth" / "auth.html",
+                            headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
+async def auth_status_handler(request):
+    if _auth_gate is None:
+        return json_ok({"initialized": False, "error": "auth_module_missing"})
+    return json_ok({"initialized": _auth_gate.is_initialized()})
+
+
+def _issue_cookie(resp: web.Response):
+    if _auth_gate is None: return resp
+    token = _auth_gate.sign_token()
+    resp.set_cookie(
+        _auth_gate.COOKIE_NAME, token,
+        max_age=_auth_gate.EXPIRY_SECONDS,
+        path="/", httponly=True, samesite="Lax",
+    )
+    return resp
+
+
+async def auth_set_handler(request):
+    if _auth_gate is None:
+        return web.json_response({"error": "auth_module_missing"}, status=500)
+    if _auth_gate.is_initialized():
+        return web.json_response({"error": "already_initialized"}, status=403)
+    data = await read_json(request)
+    p1 = (data.get("password1") or "").strip()
+    p2 = (data.get("password2") or "").strip()
+    if not p1 or p1 != p2:
+        return web.json_response({"error": "passwords_mismatch"}, status=400)
+    if len(p1) < _auth_gate.MIN_PASSWORD_LEN:
+        return web.json_response({"error": "password_too_short"}, status=400)
+    try:
+        _auth_gate.set_password(p1)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+    return _issue_cookie(web.json_response({"ok": True}))
+
+
+async def auth_login_handler(request):
+    if _auth_gate is None:
+        return web.json_response({"error": "auth_module_missing"}, status=500)
+    data = await read_json(request)
+    p = (data.get("password") or "").strip()
+    if not _auth_gate.verify_password(p):
+        return web.json_response({"error": "invalid"}, status=401)
+    return _issue_cookie(web.json_response({"ok": True}))
+
+
 def json_ok(data: dict, status: int = 200):
     return web.json_response(data, status=status, headers=cors_headers(), dumps=lambda x: json.dumps(x, ensure_ascii=False, default=str))
 
@@ -1407,7 +1483,13 @@ async def post_token_history_handler(request):
 
 
 def create_app():
-    app = web.Application(middlewares=[cors_middleware], client_max_size=1 * 1024 * 1024)
+    # 中间件顺序:cors 先把 OPTIONS preflight 短路,auth 再校验 cookie
+    app = web.Application(middlewares=[cors_middleware, auth_middleware], client_max_size=1 * 1024 * 1024)
+    # 鉴权页与端点(全部公开,无需 cookie)
+    app.router.add_get("/auth", auth_page_handler)
+    app.router.add_get("/auth/status", auth_status_handler)
+    app.router.add_post("/auth/set", auth_set_handler)
+    app.router.add_post("/auth/login", auth_login_handler)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/status", status_handler)
     app.router.add_get("/config", get_config_handler)

@@ -1,0 +1,41 @@
+/* 鉴权页 —— 故意做得跟桌面端 app 风格一致(绿色 accent、方正 4px 圆角),但完全独立,
+   不复用 app 的 styles.css,免得未鉴权状态泄露 app 资源/结构。 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; background: #f4f5f7; color: #1f2430;
+}
+.auth-card {
+  background: #fff; padding: 40px 44px;
+  border: 1px solid #e9eaee; border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(20,25,40,.04), 0 8px 24px rgba(20,25,40,.05);
+  width: 360px; max-width: 92vw;
+}
+.brand { font-size: 22px; font-weight: 700; color: #3b414f; margin-bottom: 6px; letter-spacing: .02em; }
+.brand-accent { color: #1f6f53; }
+.hint { font-size: 13px; color: #6b7180; margin-bottom: 22px; line-height: 1.55; min-height: 36px; }
+
+form { display: flex; flex-direction: column; gap: 10px; }
+input[type="password"] {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid #d4d8e0; border-radius: 4px;
+  font: inherit; color: inherit; background: #fafbfc;
+  outline: none; transition: border-color .15s;
+}
+input[type="password"]:focus { border-color: #1f6f53; background: #fff; }
+input[type="password"][hidden] { display: none; }
+
+button {
+  width: 100%; padding: 10px;
+  background: #1f6f53; color: #fff;
+  border: none; border-radius: 4px;
+  font-weight: 700; cursor: pointer;
+  margin-top: 4px; transition: background .15s, opacity .15s;
+}
+button:hover:not(:disabled) { background: #185940; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+.err { color: #d64545; font-size: 13px; margin-top: 14px; min-height: 18px; }
+.foot { color: #aab0be; font-size: 11px; margin-top: 28px; line-height: 1.6; }
+.foot code { background: #f0f1f4; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
