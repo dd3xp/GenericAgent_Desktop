@@ -1,14 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   手机适配 (≤ 768px) —— 重写版
-   ───────────────────
-   设计要点:
-   - 左右两栏改成 **悬浮抽屉**(position:fixed + transform 滑入);
-   - 默认首屏:body 在行内脚本里已贴上 sb-collapsed + rp-collapsed → 两栏全收起,中区铺满;
-   - 用 **#mobile-backdrop 真实元素**(行内脚本注入并绑 click → 加回 sb/rp-collapsed)
-     做遮罩 —— 这才是"点空白关抽屉"的关键,以前的 ::before 不响应触摸;
-   - 抽屉打开时 **toggle 按钮直接 display:none**,只留 backdrop 当唯一关闭入口,
-     避免"按钮跑哪去了找不到"的体验;
-   - 不污染 desktop:整份样式包在 @media (max-width: 768px) 里。
+   手机适配 (≤ 768px) —— Claude-style off-canvas drawer
+   ─────────────────────────────────────────────────────
+   状态机(关键):sb-collapsed / rp-collapsed 都加在 **<div class="body">** 上,
+   跟 app.js 的 bodyEl 和 styles.css 的 .body.sb-collapsed 选择器对齐。
+   首屏行内脚本同步贴上这两类 → 抽屉默认收起,不闪。
+
+   - 左右两栏 = 悬浮抽屉(position:fixed + transform 滑入,0.25s);
+   - 真实 #mobile-backdrop 元素(注入在 .body 内)做遮罩,click → 关抽屉;
+   - 任一抽屉打开 → 两个 toggle 按钮 display:none,backdrop 是唯一关闭路径;
+   - 触控目标 ≥44pt、8 点栅格、字号 ≥16px 防 iOS 缩放(per mobile-app-ui-design skill);
+   - 整份样式包在 @media (max-width: 768px),不污染 desktop。
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
@@ -65,8 +66,8 @@
     z-index: 70;
     -webkit-tap-highlight-color: transparent;
   }
-  body:not(.sb-collapsed) #mobile-backdrop,
-  body:not(.rp-collapsed) #mobile-backdrop {
+  .body:not(.sb-collapsed) #mobile-backdrop,
+  .body:not(.rp-collapsed) #mobile-backdrop {
     display: block;
     animation: mobile-bd-in .2s ease;
   }
@@ -75,8 +76,8 @@
   /* ─── 两个 toggle 按钮:固定在屏幕角落,只在两个抽屉都收起时显示 ── */
   .sb-toggle, .rp-toggle {
     position: fixed !important;
-    top: max(env(safe-area-inset-top, 0px) + 8px, 10px);
-    width: 40px !important; height: 40px !important;
+    top: max(env(safe-area-inset-top, 0px) + 8px, 12px);
+    width: 44px !important; height: 44px !important;  /* skill: tap target ≥ 44pt */
     border: 1px solid var(--line) !important;
     border-radius: var(--radius) !important;
     background: var(--panel) !important;
@@ -86,16 +87,16 @@
     z-index: 90;
     box-shadow: 0 2px 6px rgba(20, 25, 40, 0.08);
   }
-  .sb-toggle { left: 10px; }
-  .rp-toggle { right: 10px; }
-  .sb-toggle svg, .rp-toggle svg { width: 18px !important; height: 18px !important; }
+  .sb-toggle { left: 12px; }
+  .rp-toggle { right: 12px; }
+  .sb-toggle svg, .rp-toggle svg { width: 20px !important; height: 20px !important; }
 
   /* 关键:任何抽屉打开,两个 toggle 都隐藏(免得"按钮跑没"的疑惑)
      —— 点 backdrop 是唯一关闭路径,跟标准移动端抽屉一致 */
-  body:not(.sb-collapsed) .sb-toggle,
-  body:not(.sb-collapsed) .rp-toggle,
-  body:not(.rp-collapsed) .sb-toggle,
-  body:not(.rp-collapsed) .rp-toggle {
+  .body:not(.sb-collapsed) .sb-toggle,
+  .body:not(.sb-collapsed) .rp-toggle,
+  .body:not(.rp-collapsed) .sb-toggle,
+  .body:not(.rp-collapsed) .rp-toggle {
     display: none !important;
   }
 
@@ -132,7 +133,7 @@
     max-width: 50vw;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .send { width: 40px !important; height: 40px !important; }
+  .send { width: 44px !important; height: 44px !important; }  /* skill: tap target ≥ 44pt */
 
   /* ─── 缩略图带:压短 ───────────────────────────────────────── */
   .thumb-strip { max-height: 80px; }

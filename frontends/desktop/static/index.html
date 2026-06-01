@@ -6,7 +6,7 @@
 <title>GenericAgent</title>
 <link rel="stylesheet" href="assets/fonts/fonts.css">
 <link rel="stylesheet" href="styles.css?v=92">
-<link rel="stylesheet" href="mobile.css?v=1">
+<link rel="stylesheet" href="mobile.css?v=3">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -49,25 +49,27 @@
 </script>
 </head>
 <body>
-<script>
-  /* 手机视口:
-     1) 默认把左右两栏都收起来,中区铺满,行内同步避免首屏闪;
-     2) 注入一个 #mobile-backdrop 真实元素,点空白处关掉所有抽屉
-        —— mobile.css 用它做遮罩(替代以前不响应触摸的 ::before 伪元素)。 */
-  if (matchMedia('(max-width: 768px)').matches) {
-    document.body.classList.add('sb-collapsed', 'rp-collapsed');
-    var __bd = document.createElement('div');
-    __bd.id = 'mobile-backdrop';
-    __bd.addEventListener('click', function () {
-      document.body.classList.add('sb-collapsed', 'rp-collapsed');
-    });
-    document.body.appendChild(__bd);
-  }
-</script>
 
 <div id="app">
 
   <div class="body">
+  <script>
+    /* 手机抽屉初始化(必须落在 .body 这个 div 上,不是外层 <body>):
+       - app.js 用 document.querySelector('.body') 切换 sb/rp-collapsed,
+       - styles.css 选择器也是 .body.sb-collapsed .sidebar,
+       所以这里 currentScript.parentElement === <div class="body">,行内同步打两类,
+       让首屏直接渲染成"两栏收起"(没有闪) + 注入真实 backdrop 给关闭用。 */
+    if (matchMedia('(max-width: 768px)').matches) {
+      var __mb = document.currentScript.parentElement;
+      __mb.classList.add('sb-collapsed', 'rp-collapsed');
+      var __bd = document.createElement('div');
+      __bd.id = 'mobile-backdrop';
+      __bd.addEventListener('click', function () {
+        __mb.classList.add('sb-collapsed', 'rp-collapsed');
+      });
+      __mb.appendChild(__bd);
+    }
+  </script>
 
     <!-- ① 左侧边栏 -->
     <aside class="sidebar">
