@@ -8,7 +8,10 @@
    要让 bridge 代理 conductor —— 改这一块即可,下面所有 URL 引用全都跟着走。
    *_ORIGIN 不带尾巴 path,调用方自己拼 "/sessions" "/ws" 等。 */
 const BRIDGE_PORT = 14168;
-const CONDUCTOR_PORT = 8900;
+// auth-gate 专用:SakuraFrp 远程端口下限 10240,所以 conductor 远程映射成 18900,
+// 进程本身仍听 8900,SakuraFrp 隧道做 远程 18900 ⇆ 本地 8900 的端口映射。
+// 此处 18900 是 auth-gate 分支特有的部署值,main / RoundSquisheen 上仍是 8900。
+const CONDUCTOR_PORT = 18900;
 const BRIDGE_ORIGIN = `${location.protocol}//${location.hostname}:${BRIDGE_PORT}`;
 const BRIDGE_WS_ORIGIN = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:${BRIDGE_PORT}`;
 const CONDUCTOR_ORIGIN = `http://${location.hostname}:${CONDUCTOR_PORT}`;
