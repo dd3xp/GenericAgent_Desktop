@@ -1436,15 +1436,15 @@ function msgNode(msg) {
     const copyBtn = document.createElement('button');
     copyBtn.className = 'bubble-copy-btn';
     copyBtn.title = t('act.copy');
-    copyBtn.innerHTML = SVG_COPY_ICON;
+    copyBtn.textContent = '\u29C9';
     copyBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const text = (msg.role === 'user')
         ? stripAttachPlaceholders((typeof msg.display === 'string' && msg.display.length) ? msg.display : (msg.content || ''))
         : extractLastTurnForCopy(msg.content || '');
       navigator.clipboard.writeText(text).then(() => {
-        copyBtn.innerHTML = SVG_CHECK_ICON;
-        setTimeout(() => { copyBtn.innerHTML = SVG_COPY_ICON; }, 1500);
+        copyBtn.textContent = '\u2713';
+        setTimeout(() => { copyBtn.textContent = '\u29C9'; }, 1500);
       });
     });
     el.appendChild(copyBtn);

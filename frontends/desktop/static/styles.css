@@ -1535,12 +1535,12 @@ span.flatpickr-weekday{ color:var(--muted) !important; font-size:11px; }
   display:inline-flex; align-items:center; flex-basis:100%;
   margin-top:2px; padding:2px 4px; border:none; background:none;
   color:var(--muted); cursor:pointer; opacity:0; transition:opacity .15s;
+  font-size:.86em; line-height:1;
 }
 .msg:hover .bubble-copy-btn{ opacity:1; }
 .msg.user .bubble-copy-btn{ justify-content:flex-end; }
 .msg.assistant .bubble-copy-btn{ justify-content:flex-start; }
 .bubble-copy-btn:hover{ color:var(--txt-2); }
-.bubble-copy-btn svg{ width:14px; height:14px; }
 /* ---- highlight.js 适配 ---- */
 .hljs{ background:transparent !important; padding:0 !important; }
 html[data-appearance="dark"] .bubble.md{
