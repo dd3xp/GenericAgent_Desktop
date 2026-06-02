@@ -19,6 +19,11 @@
   body { overflow: hidden; }
   #app, .body { height: 100dvh; min-height: 100dvh; }
 
+  /* ─── 关掉移动浏览器点击时那一闪的蓝色方块(tap highlight)──────── */
+  button, a, [role="button"], .nav-item, .svc-tab, .tok-tab, .pill {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   /* ─── 主区铺满,中央占整屏 ────────────────────────────────────── */
   .main { flex: 1 1 auto !important; width: 100%; min-width: 0; }
 
