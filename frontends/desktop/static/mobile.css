@@ -73,39 +73,17 @@
   }
   @keyframes mobile-bd-in { from { opacity: 0; } to { opacity: 1; } }
 
-  /* ─── 两个 toggle 按钮:固定在屏幕角落,只在两个抽屉都收起时显示 ── */
-  .sb-toggle, .rp-toggle {
-    position: fixed !important;
-    top: max(env(safe-area-inset-top, 0px) + 8px, 12px);
-    width: 44px !important; height: 44px !important;  /* skill: tap target ≥ 44pt */
-    border: 1px solid var(--line) !important;
-    border-radius: var(--radius) !important;
-    background: var(--panel) !important;
-    color: var(--txt-2) !important;
-    opacity: 1 !important;
-    margin: 0 !important;
-    z-index: 90;
-    box-shadow: 0 2px 6px rgba(20, 25, 40, 0.08);
-  }
-  .sb-toggle { left: 12px; }
-  .rp-toggle { right: 12px; }
-  .sb-toggle svg, .rp-toggle svg { width: 20px !important; height: 20px !important; }
-
-  /* 关键:任何抽屉打开,两个 toggle 都隐藏(免得"按钮跑没"的疑惑)
-     —— 点 backdrop 是唯一关闭路径,跟标准移动端抽屉一致 */
-  .body:not(.sb-collapsed) .sb-toggle,
-  .body:not(.sb-collapsed) .rp-toggle,
-  .body:not(.rp-collapsed) .sb-toggle,
-  .body:not(.rp-collapsed) .rp-toggle {
-    display: none !important;
-  }
-
-  /* ─── 顶部 page-top(运行状态条)压扁 + 给两个角的 toggle 让位 ─── */
+  /* ─── 顶栏 ───
+     桌面规则 padding:0 4px 在窄屏下还是不够贴边,这里 padding:0 直接把 ≡ / 💬
+     图标顶到屏幕极边;同时把 .pt-icon 放大到 40px 满足拇指触控。
+     旧的 .sb-toggle/.rp-toggle 浮动按钮 + display:none 那套已经随顶栏迁移
+     一并删掉(那两个 DOM 元素已经在 index.html 里删了)。 */
   .page > .page-top {
     height: 44px; flex: 0 0 44px;
-    padding: 0 60px;
-    justify-content: center;
+    padding: 0;
   }
+  .pt-icon { width: 40px !important; height: 40px !important; }
+  .pt-icon svg { width: 20px !important; height: 20px !important; }
 
   /* ─── 聊天起始页:2 列卡片网格(超窄屏再改 1 列,见底部) ─────── */
   .chat-start { width: 100%; padding: 16px 16px 0; max-width: none; }
@@ -181,5 +159,4 @@
 @media (max-width: 380px) {
   .feature-grid { grid-template-columns: 1fr !important; }
   .composer-bot > #model-chip { max-width: 40vw; }
-  .page > .page-top { padding: 0 56px; }
 }
