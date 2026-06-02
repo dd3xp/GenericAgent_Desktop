@@ -1510,12 +1510,29 @@ function appendMessage(sess, msg) {
   refreshEmptyState(sess); scrollBottom(true);
   if (msg.role === 'assistant' || msg.role === 'user') syncAskUserUi();
 }
-function isNearBottom(threshold = 80) {
-  return msgArea.scrollHeight - msgArea.scrollTop - msgArea.clientHeight < threshold;
+// 自动跟随：流式输出时是否自动贴底。用户上滑查看上文则暂停，滚回底部则恢复。
+// 取代旧的"每 tick 用 80px 阈值猜测是否贴底"做法——阈值无状态，会与用户上滑反复打架。
+let autoFollow = true;
+function atBottom(threshold = 4) {
+  return msgArea.scrollHeight - msgArea.scrollTop - msgArea.clientHeight <= threshold;
+}
+if (msgArea) {
+  // 用户主动上滑（滚轮向上 / 触摸拖动）且未贴底 → 暂停跟随
+  msgArea.addEventListener('wheel', (e) => {
+    if (e.deltaY < 0 && !atBottom()) autoFollow = false;
+  }, { passive: true });
+  msgArea.addEventListener('touchmove', () => {
+    if (!atBottom()) autoFollow = false;
+  }, { passive: true });
+  // 滚回底部（含程序化贴底）→ 恢复跟随
+  msgArea.addEventListener('scroll', () => {
+    if (atBottom()) autoFollow = true;
+  }, { passive: true });
 }
 function scrollBottom(force) {
-  if (force || isNearBottom()) {
-    requestAnimationFrame(() => { msgArea.scrollTop = msgArea.scrollHeight; });
+  if (force) autoFollow = true;            // 显式请求（发送消息、加载提示）恢复跟随
+  if (force || autoFollow) {
+    requestAnimationFrame(() => { if (force || autoFollow) msgArea.scrollTop = msgArea.scrollHeight; });
   }
 }
 /* ═══════════════ 打字机效果 (PR移植) ═══════════════ */
@@ -1550,9 +1567,11 @@ function renderDraft(sess) {
   refreshEmptyState(sess);
 }
 
-// 重写打字机气泡：先记 near + 保存 <details> open 态 + badge；innerHTML 替换后恢复；仅当原先贴底才滚
+// 重写打字机气泡：保存 <details> open 态 + badge；innerHTML 替换后恢复。
+// 跟随逻辑由 autoFollow 意图标志统一管理：跟随则重建后贴底，否则冻结 scrollTop
+// 抵消 innerHTML 全量重建触发的浏览器 scroll-anchor 漂移（实测每 tick 漂移百余 px）。
 function rewriteDraftBubble(r, visible) {
-  const wasNear = isNearBottom();
+  const frozenTop = autoFollow ? -1 : msgArea.scrollTop;
   const openIdx = [];
   // 保存 badge（会被 innerHTML 覆盖）
   const oldBadge = r.draftEl ? r.draftEl.querySelector(':scope > .task-elapsed') : null;
@@ -1572,7 +1591,8 @@ function rewriteDraftBubble(r, visible) {
     badge.dataset.live = '1';
     r.draftEl.prepend(badge);
   }
-  if (wasNear) scrollBottom(true);
+  if (frozenTop < 0) scrollBottom(true);        // 跟随：贴底
+  else if (msgArea.scrollTop !== frozenTop) msgArea.scrollTop = frozenTop;  // 不跟随：冻结，抵消重建漂移
 }
 
 function flushTypewriter(sess) {
