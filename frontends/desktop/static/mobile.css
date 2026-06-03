@@ -27,6 +27,16 @@
   /* ─── 主区铺满,中央占整屏 ────────────────────────────────────── */
   .main { flex: 1 1 auto !important; width: 100%; min-width: 0; }
 
+  /* ─── 横向溢出兜底 ──────────────────────────────────────────
+     长 URL、未带空格的长字符串、宽 pre/code 块,都会把祖先容器顶宽,
+     连带把 .page-top 右上角的 pt-rp-toggle 推出可视区。
+     在每层容器都堵一道 overflow-x: hidden + min-width: 0,
+     消息气泡 / 内部内容用 overflow-wrap: anywhere 强行换行。 */
+  .body, .main, .msg-area, .page, .page-pad { overflow-x: hidden; min-width: 0; }
+  .msgs { max-width: 100% !important; min-width: 0; }
+  .bubble, .bubble.md { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+  .bubble.md pre, .bubble.md code, .bubble.md table { max-width: 100%; }
+
   /* ─── 抽屉层级(z-index 总览):
         drawer = 100,backdrop = 70,toggle = 90(被 drawer 遮住时随之 display:none) */
 
