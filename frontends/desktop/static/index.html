@@ -66,6 +66,14 @@
         __mb.classList.add('sb-collapsed', 'rp-collapsed');
       });
       __mb.appendChild(__bd);
+      /* 手机端导航后自动收抽屉(标准 mobile drawer UX):
+         - 点左栏 nav-item(聊天/指挥家/后台服务/Token 统计)→ 收左栏
+         - 点右栏 conv-item(任一 session)→ 收右栏
+         事件委托挂在 .body 上,bubble 阶段跑,不挡 app.js 原有处理。 */
+      __mb.addEventListener('click', function (e) {
+        if (e.target.closest('.nav-item')) __mb.classList.add('sb-collapsed');
+        if (e.target.closest('.conv-item')) __mb.classList.add('rp-collapsed');
+      });
     }
   </script>
 
