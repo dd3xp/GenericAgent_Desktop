@@ -126,3 +126,13 @@ def is_public_path(path: str) -> bool:
     if path.startswith("/static/auth/"): return True
     if path.startswith("/auth/"): return True  # 兜底
     return False
+
+
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def is_loopback_client(client_host: str) -> bool:
+    """同机进程互调(127.0.0.1 / ::1)直接放行——conductor agent 跟 bridge agent
+    都通过 http://127.0.0.1:PORT 调自己的 API,没 cookie 但本质上跟"用户在键盘上敲"
+    安全等价。外部走 frp 隧道仍然要 cookie。"""
+    return (client_host or "") in _LOOPBACK_HOSTS

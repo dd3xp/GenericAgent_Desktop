@@ -37,10 +37,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 
 # ── 鉴权中间件:除了 /auth/* 之外的 HTTP 请求都得带有效 cookie ─────────────────
+# 例外:本机进程互调(127.0.0.1 / ::1)放行——conductor agent 自己要打这些 API,
+# 没 cookie 但跟"用户在键盘上敲"安全等价;外部走 frp 隧道仍然要 cookie。
 @app.middleware("http")
 async def auth_http_middleware(request: Request, call_next):
     path = request.url.path
     if auth_gate.is_public_path(path):
+        return await call_next(request)
+    if request.client and auth_gate.is_loopback_client(request.client.host):
         return await call_next(request)
     token = request.cookies.get(auth_gate.COOKIE_NAME, "")
     if auth_gate.verify_token(token):
