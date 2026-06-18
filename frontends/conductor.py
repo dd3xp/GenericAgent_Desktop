@@ -1,4 +1,13 @@
 import os, sys, re, time, json, uuid, queue, asyncio, threading
+
+# The conductor agent calls the conductor's own HTTP API on 127.0.0.1:8900. If a system proxy
+# (e.g. Clash on 127.0.0.1:7890) is set, requests/urllib route these loopback calls through it
+# and get 502, so the dispatcher can't work. Always bypass the proxy for localhost.
+for _k in ("NO_PROXY", "no_proxy"):
+    _cur = os.environ.get(_k, "")
+    _hosts = "127.0.0.1,localhost,0.0.0.0,::1"
+    os.environ[_k] = (_cur + "," + _hosts) if _cur else _hosts
+
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager

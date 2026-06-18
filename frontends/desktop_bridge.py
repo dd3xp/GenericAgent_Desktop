@@ -34,6 +34,15 @@ WS API (state sync):
 from __future__ import annotations
 
 import asyncio, contextlib, importlib, json, os, re, subprocess, sys
+
+# Agents call loopback HTTP services (e.g. conductor on 127.0.0.1:8900). A system proxy
+# (e.g. Clash on 127.0.0.1:7890) would route these through it and return 502, so localhost
+# must always bypass the proxy. Spawned services inherit this via env={**os.environ,...}.
+for _k in ("NO_PROXY", "no_proxy"):
+    _cur = os.environ.get(_k, "")
+    _hosts = "127.0.0.1,localhost,0.0.0.0,::1"
+    os.environ[_k] = (_cur + "," + _hosts) if _cur else _hosts
+
 from collections import deque
 import threading, time, traceback, uuid
 from dataclasses import dataclass, field
