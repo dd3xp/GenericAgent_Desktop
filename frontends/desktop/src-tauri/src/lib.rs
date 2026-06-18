@@ -443,8 +443,55 @@ fn request_start_extras() {
     let _ = stream.read(&mut [0u8; 512]);
 }
 
+const BRIDGE_PORT: u16 = 14168;
+
+#[cfg(windows)]
+fn kill_listener_on_port(port: u16) {
+    let script = format!(
+        "for /f \"tokens=5\" %a in ('netstat -ano ^| findstr \":{port} \" ^| findstr LISTENING') do taskkill /F /PID %a /T"
+    );
+    let _ = Command::new("cmd")
+        .args(["/C", &script])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn kill_listener_on_port(port: u16) {
+    let _ = Command::new("fuser")
+        .args(["-k", &format!("{port}/tcp")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(target_os = "macos")]
+fn kill_listener_on_port(port: u16) {
+    let _ = Command::new("sh")
+        .args([
+            "-c",
+            &format!("lsof -ti tcp:{port} -sTCP:LISTEN | xargs kill -9 2>/dev/null; true"),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+/// Stop conductor/scheduler via bridge, then tear down bridge (14168).
+fn shutdown_on_exit() {
+    request_stop_extras();
+    if let Some(mut child) = BRIDGE_PROCESS.lock().unwrap().take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    if is_bridge_running() {
+        kill_listener_on_port(BRIDGE_PORT);
+    }
+}
+
 fn is_bridge_running() -> bool {
-    TcpStream::connect(("127.0.0.1", 14168)).is_ok()
+    TcpStream::connect(("127.0.0.1", BRIDGE_PORT)).is_ok()
 }
 
 fn wait_for_port(port: u16, timeout: Duration) -> bool {
@@ -712,15 +759,17 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 let label = window.label();
                 if label == "main" {
-                    request_stop_extras();
+                    shutdown_on_exit();
                     window.app_handle().exit(0);
                 } else if label == "setup" {
                     // Setup closed -> exit if main is not visible
                     if let Some(main_win) = window.app_handle().get_webview_window("main") {
                         if !main_win.is_visible().unwrap_or(false) {
+                            shutdown_on_exit();
                             window.app_handle().exit(0);
                         }
                     } else {
+                        shutdown_on_exit();
                         window.app_handle().exit(0);
                     }
                 }
