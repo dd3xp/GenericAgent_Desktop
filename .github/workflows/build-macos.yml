@@ -64,15 +64,15 @@ jobs:
             --exclude='frontends/desktop/src-tauri/target/' \
             --exclude='frontends/desktop/src-tauri/gen/'
 
-          cat > "$PORTABLE_DIR/README-portable-macos.txt" <<'EOF'
-GenericAgent macOS Portable
-
-解压后可直接双击 GenericAgent.app 运行。
-source/ 目录包含对应源码。
-
-如果 macOS 提示无法打开，可执行：
-  xattr -cr GenericAgent.app
-EOF
+          printf '%s\n' \
+            'GenericAgent macOS Portable' \
+            '' \
+            '解压后可直接双击 GenericAgent.app 运行。' \
+            'source/ 目录包含对应源码。' \
+            '' \
+            '如果 macOS 提示无法打开，可执行：' \
+            '  xattr -cr GenericAgent.app' \
+            > "$PORTABLE_DIR/README-portable-macos.txt"
 
           ditto -c -k --sequesterRsrc --keepParent "$PORTABLE_DIR" "$ZIP_PATH"
           ls -lh dist
