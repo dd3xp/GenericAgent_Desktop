@@ -1,0 +1,46 @@
+name: Build macOS Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci/macos-build
+    tags:
+      - "v*"
+
+jobs:
+  build-macos:
+    name: Build macOS DMG
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            frontends/desktop/src-tauri -> target
+
+      - name: Install desktop dependencies
+        working-directory: frontends/desktop
+        run: npm install
+
+      - name: Build Tauri macOS DMG
+        working-directory: frontends/desktop
+        run: npm run tauri build -- --bundles dmg
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GenericAgent-macos-dmg
+          path: frontends/desktop/src-tauri/target/release/bundle/dmg/*.dmg
