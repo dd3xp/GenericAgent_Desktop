@@ -43,26 +43,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APP_PATH="frontends/desktop/src-tauri/target/release/bundle/macos/GenericAgent.app"
           PORTABLE_DIR="dist/GenericAgent-macos-portable"
           ZIP_PATH="dist/GenericAgent-macos-portable.zip"
 
-          test -d "$APP_PATH"
+          echo "Looking for built .app bundle..."
+          find frontends/desktop/src-tauri/target/release -maxdepth 5 -name '*.app' -type d -print
+          APP_PATH="$(find frontends/desktop/src-tauri/target/release -maxdepth 5 -name 'GenericAgent.app' -type d -print -quit)"
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH="$(find frontends/desktop/src-tauri/target/release -maxdepth 5 -name '*.app' -type d -print -quit)"
+          fi
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: no .app bundle found under target/release" >&2
+            find frontends/desktop/src-tauri/target/release -maxdepth 4 -type d -print >&2
+            exit 1
+          fi
+          echo "Using app bundle: $APP_PATH"
+
           rm -rf dist
           mkdir -p "$PORTABLE_DIR/source"
 
           # Preserve macOS app bundle metadata/resource forks.
           ditto "$APP_PATH" "$PORTABLE_DIR/GenericAgent.app"
 
-          # Include source code, but exclude VCS data and build/dependency caches.
-          rsync -a ./ "$PORTABLE_DIR/source/" \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='dist/' \
-            --exclude='frontends/desktop/node_modules/' \
-            --exclude='frontends/desktop/package-lock.json' \
-            --exclude='frontends/desktop/src-tauri/target/' \
-            --exclude='frontends/desktop/src-tauri/gen/'
+          # Include tracked source code only. This avoids copying VCS data,
+          # build outputs, dependency caches, and the dist directory.
+          git archive --format=tar HEAD | tar -x -C "$PORTABLE_DIR/source"
+          rm -rf "$PORTABLE_DIR/source/.github"
 
           printf '%s\n' \
             'GenericAgent macOS Portable' \
