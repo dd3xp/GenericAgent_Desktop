@@ -8,6 +8,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     name: Build macOS DMG
@@ -83,6 +86,10 @@ jobs:
           find "$PORTABLE_DIR" -maxdepth 2 -print | sed -n '1,80p'
           du -sh "$PORTABLE_DIR" || true
 
+          # Create a standalone zip for GitHub Release downloads.
+          ditto -c -k --sequesterRsrc --keepParent "$PORTABLE_DIR" "dist/GenericAgent-macos-portable.zip"
+          ls -lh dist/GenericAgent-macos-portable.zip
+
       - name: Upload DMG artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -95,3 +102,21 @@ jobs:
         with:
           name: GenericAgent-macos-portable-zip
           path: dist/GenericAgent-macos-portable/
+
+      - name: Publish macOS CI prerelease
+        uses: ncipollo/release-action@v1
+        with:
+          tag: macos-ci-latest
+          name: GenericAgent macOS CI Latest
+          body: |
+            Automated macOS build from `${{ github.sha }}`.
+
+            Includes:
+            - GenericAgent-macos-portable.zip
+            - GenericAgent macOS DMG
+          prerelease: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: |
+            dist/GenericAgent-macos-portable.zip
+            frontends/desktop/src-tauri/target/release/bundle/dmg/*.dmg
