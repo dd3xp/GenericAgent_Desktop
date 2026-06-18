@@ -366,7 +366,6 @@ fn run_offline_prepare(project_dir: &str, report: &dyn Fn(i32, &str)) -> Result<
 }
 
 const CONDUCTOR_PORT: u16 = 8900;
-const SCHEDULER_LOCK_PORT: u16 = 45762;
 
 fn is_port_open(port: u16) -> bool {
     let addr = format!("127.0.0.1:{}", port);
@@ -376,24 +375,18 @@ fn is_port_open(port: u16) -> bool {
     TcpStream::connect_timeout(&sock_addr, Duration::from_millis(300)).is_ok()
 }
 
-fn extras_ports_busy_label() -> Option<String> {
-    let mut busy = Vec::new();
+/// Conductor service port only; scheduler lock (45762) is handled inside scheduler.py.
+fn conductor_port_busy_label() -> Option<String> {
     if is_port_open(CONDUCTOR_PORT) {
-        busy.push(format!("{} (conductor)", CONDUCTOR_PORT));
-    }
-    if is_port_open(SCHEDULER_LOCK_PORT) {
-        busy.push(format!("{} (scheduler)", SCHEDULER_LOCK_PORT));
-    }
-    if busy.is_empty() {
-        None
+        Some(format!("{} (conductor)", CONDUCTOR_PORT))
     } else {
-        Some(busy.join(", "))
+        None
     }
 }
 
-fn alert_extras_ports_busy(win: &tauri::WebviewWindow, ports: &str) {
+fn alert_conductor_port_busy(win: &tauri::WebviewWindow, ports: &str) {
     let msg = format!(
-        "Conductor/Scheduler 端口已被占用：{}\n请结束占用进程后点「确定」重新检测。",
+        "Conductor 端口已被占用：{}\n请结束占用进程后点「确定」重新检测。",
         ports
     );
     let js = format!(
@@ -403,15 +396,15 @@ fn alert_extras_ports_busy(win: &tauri::WebviewWindow, ports: &str) {
     let _ = win.eval(&js);
 }
 
-/// Browser alert on loading.html; re-prompt if ports stay busy after dismiss.
-fn wait_until_extras_ports_free(win: Option<&tauri::WebviewWindow>) {
-    while let Some(ports) = extras_ports_busy_label() {
-        eprintln!("[tauri] extras ports busy: {}", ports);
+/// Browser alert on loading.html; re-prompt if conductor port stays busy after dismiss.
+fn wait_until_conductor_port_free(win: Option<&tauri::WebviewWindow>) {
+    while let Some(ports) = conductor_port_busy_label() {
+        eprintln!("[tauri] conductor port busy: {}", ports);
         if let Some(w) = win {
-            alert_extras_ports_busy(w, &ports);
+            alert_conductor_port_busy(w, &ports);
         }
         let wait_start = Instant::now();
-        while extras_ports_busy_label().is_some() {
+        while conductor_port_busy_label().is_some() {
             if wait_start.elapsed() > Duration::from_secs(3) {
                 break;
             }
@@ -614,7 +607,7 @@ pub fn run() {
             thread::spawn(move || {
                 // Progress reporter: push status into the loading window (window.gaProgress).
                 let main_win = handle.get_webview_window("main");
-                wait_until_extras_ports_free(main_win.as_ref());
+                wait_until_conductor_port_free(main_win.as_ref());
 
                 let report = |pct: i32, msg: &str| {
                     if let Some(w) = &main_win {
@@ -664,7 +657,7 @@ pub fn run() {
                 let bridge_ready = wait_for_port(14168, wait);
 
                 if bridge_ready {
-                    wait_until_extras_ports_free(main_win.as_ref());
+                    wait_until_conductor_port_free(main_win.as_ref());
                     request_start_extras();
                     if !wait_for_port(14168, Duration::from_secs(15)) {
                         eprintln!("[tauri] bridge not reachable before navigate");
