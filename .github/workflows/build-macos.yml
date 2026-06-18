@@ -35,9 +35,9 @@ jobs:
         working-directory: frontends/desktop
         run: npm install
 
-      - name: Build Tauri macOS DMG
+      - name: Build Tauri macOS app and DMG
         working-directory: frontends/desktop
-        run: npm run tauri build -- --bundles dmg
+        run: npm run tauri build -- --bundles app,dmg
 
       - name: Create portable zip with app and source
         shell: bash
