@@ -25,8 +25,6 @@ HTTP API:
   GET    /services/panel
   GET    /services/mykey
   POST   /services/mykey       body: {"content":"..."}
-  POST   /services/stop-extras   stop conductor + scheduler (127.0.0.1 only)
-  POST   /services/start-extras  start conductor + scheduler (127.0.0.1 only)
 
 WS API (state sync):
   GET /ws -> on connect sends services.snapshot; service.changed on updates
@@ -42,6 +40,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 from aiohttp import web, WSMsgType
+
+# Conductor self-calls 127.0.0.1:8900 from a spawned agent. If the desktop
+# process inherits a system proxy, keep loopback HTTP out of it.
+for _k in ("NO_PROXY", "no_proxy"):
+    _cur = os.environ.get(_k, "")
+    _hosts = "127.0.0.1,localhost,0.0.0.0,::1"
+    os.environ[_k] = (_cur + "," + _hosts) if _cur else _hosts
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -810,6 +815,38 @@ def _cpu_pct(pid: Optional[int]) -> Optional[float]:
         return None
 
 
+def _terminate_proc_tree(proc: subprocess.Popen, timeout: float = 3.0) -> None:
+    if proc.poll() is not None:
+        return
+    if sys.platform == "win32":
+        with contextlib.suppress(Exception):
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=timeout,
+            )
+        try:
+            proc.wait(timeout=timeout)
+            return
+        except Exception:
+            pass
+        with contextlib.suppress(Exception):
+            proc.kill()
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=timeout)
+        return
+    with contextlib.suppress(Exception):
+        proc.terminate()
+    try:
+        proc.wait(timeout=timeout)
+    except Exception:
+        with contextlib.suppress(Exception):
+            proc.kill()
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=timeout)
+
+
 class ServiceManager:
     """hub.pyw ServiceManager + HTTP/WS glue."""
 
@@ -959,8 +996,7 @@ class ServiceManager:
         self._stopping.add(sid)
         proc = self.procs.get(sid)
         if proc and proc.poll() is None:
-            proc.terminate()
-            proc.wait()
+            _terminate_proc_tree(proc)
         self.procs.pop(sid, None)
         self._stopping.discard(sid)
         item = self._state(sid)
@@ -1503,20 +1539,6 @@ def _is_local_peer(peer: str) -> bool:
     return p in ("127.0.0.1", "::1") or p.startswith("::ffff:127.0.0.1")
 
 
-async def stop_extras_handler(request):
-    if not _is_local_peer(request.remote or ""):
-        return json_ok({"ok": False, "error": "forbidden"}, status=403)
-    services.stop_all_extras()
-    return json_ok({"ok": True})
-
-
-async def start_extras_handler(request):
-    if not _is_local_peer(request.remote or ""):
-        return json_ok({"ok": False, "error": "forbidden"}, status=403)
-    services.autostart_extras()
-    return json_ok({"ok": True})
-
-
 async def identity_handler(request):
     # Identifies which install this bridge belongs to. A newly launched app compares
     # ga_root against its own; a mismatch means an orphaned bridge from a different
@@ -1617,8 +1639,6 @@ def create_app():
     app.router.add_get("/services/panel", service_panel_handler)
     app.router.add_get("/services/mykey", mykey_get_handler)
     app.router.add_post("/services/mykey", mykey_save_handler)
-    app.router.add_post("/services/stop-extras", stop_extras_handler)
-    app.router.add_post("/services/start-extras", start_extras_handler)
     app.router.add_get("/services/identity", identity_handler)
     app.router.add_post("/services/shutdown", shutdown_handler)
 
