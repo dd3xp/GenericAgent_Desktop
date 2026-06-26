@@ -34,6 +34,8 @@ tasks/
 *.zip
 *.exe
 
+spec/
+
 memory/*
 !memory/memory_management_sop.md
 

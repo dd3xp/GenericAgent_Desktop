@@ -1018,8 +1018,11 @@ if (pqEl && pqToggle) {
     pqEl.classList.toggle('collapsed', collapsed);
     pqToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   };
-  let pqCollapsed = false;
-  try { pqCollapsed = localStorage.getItem('ga_pq_collapsed') === '1'; } catch (_) {}
+  let pqCollapsed = true;
+  try {
+    const saved = localStorage.getItem('ga_pq_collapsed');
+    if (saved != null) pqCollapsed = saved === '1';
+  } catch (_) {}
   applyPq(pqCollapsed);
   const togglePq = (e) => {
     if (e) e.stopPropagation();
