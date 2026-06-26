@@ -1,10 +1,26 @@
 {
-  "name": "genericagent-web2",
+  "name": "genericagent-desktop",
+  "private": true,
   "version": "0.1.0",
+  "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "tauri": "tauri"
   },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tdesign-react": "^1.7.0"
+  },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "less": "^4.2.1",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.5"
   }
 }
