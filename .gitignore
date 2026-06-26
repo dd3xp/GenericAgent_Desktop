@@ -36,6 +36,11 @@ tasks/
 
 spec/
 
+# Node / Frontend build
+node_modules/
+*.local
+.vite/
+
 memory/*
 !memory/memory_management_sop.md
 
