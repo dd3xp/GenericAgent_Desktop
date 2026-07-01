@@ -1,0 +1,129 @@
+/* Settings Modal — React Island 样式 */
+
+.ga-settings-dialog .semi-modal-body {
+  padding: 8px 0;
+}
+
+.ga-set-block {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--semi-color-border, #e8e8e8);
+}
+
+.ga-set-block:last-child {
+  border-bottom: none;
+}
+
+.ga-set-sec-t {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--semi-color-text-0, #1c1f23);
+  margin-bottom: 10px;
+}
+
+/* Font size slider */
+.ga-font-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ga-font-value {
+  font-size: 13px;
+  color: var(--semi-color-text-2, #646a73);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Model list */
+.ga-model-mixin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ga-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.ga-model-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ga-model-item:hover {
+  background: var(--semi-color-fill-0, #f5f5f5);
+}
+
+.ga-model-item--selected {
+  background: var(--semi-color-primary-light-default, #e8f3ff);
+}
+
+.ga-model-row-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ga-model-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ga-model-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ga-model-item:hover .ga-model-actions {
+  opacity: 1;
+}
+
+.ga-add-model-btn {
+  margin-top: 4px;
+}
+
+/* Feature buttons */
+.ga-feature-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Add/Edit Model form */
+.ga-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ga-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ga-form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--semi-color-text-0, #1c1f23);
+}
+
+.ga-form-req {
+  color: var(--semi-color-danger, #f93920);
+  margin-left: 2px;
+}

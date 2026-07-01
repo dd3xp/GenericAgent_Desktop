@@ -3817,12 +3817,7 @@ function renderSettingsModels() {
   applyI18n();
 }
 function openSettings() {
-  openModal('settings-modal');
-  renderSettingsModels();
-  renderLangList();
-  applyTheme(theme, { persist: false });
-  applyAppearance(appearance, plainUi, { persist: false });
-  applyChatFontSize(chatFontSize, { persist: false });
+  window.dispatchEvent(new Event('ga:open-settings'));
 }
 async function loadModelProfiles() {
   try {
@@ -5610,8 +5605,12 @@ if (chanListEl) {
 }
 
 /* ═══════════════ 启动 ═══════════════ */
+window.gaLegacy = { applyAppearance, applyI18n, syncHljsTheme, selectModel, updateModelChip, renderSessionList, refreshStatusLabel };
+
 (async () => {
+try {
 await loadSessions();
+} catch (_) {}
 applyAppearance(appearance, plainUi, { persist: false });
 applyTheme(theme, { persist: false });
 initChatFontStepper();
@@ -5625,11 +5624,9 @@ loadHiddenBuiltins();
 renderAllPresets();
 if (state.activeId) setActiveSession(state.activeId);
 else refreshEmptyState(null);
-// bridge-ready 可能在上面的 await 期间就已到达（WS 一连上 bridge 即推送），
-// 此时 state.bridgeReady 已为 true，直接按真实状态渲染，避免把「就绪」覆盖回「连接中」。
 if (state.bridgeReady) refreshStatusLabel();
 else chatStatus.setConnecting();
-window.ga.startBridge && window.ga.startBridge();
+try { window.ga.startBridge && window.ga.startBridge(); } catch (_) {}
 })();
 
 /* 聊天 / Conductor 共用 composer 绑定（结构：.composer > .composer-slot > .composer-inset） */

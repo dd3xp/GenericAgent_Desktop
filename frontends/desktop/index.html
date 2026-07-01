@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>GenericAgent</title>
 <link rel="stylesheet" href="/assets/fonts/fonts.css?v=2">
+<link rel="stylesheet" href="/styles.css">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -43,7 +44,7 @@
 })();
 </script>
 </head>
-<body>
+<body class="no-transition">
 
 <div id="app">
 
@@ -89,7 +90,7 @@
         </div>
         <div class="pq-body">
           <button type="button" class="pq-btn" data-provider="deepseek">
-            <span class="pq-logo" style="background:rgba(77,107,254,.12)" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#4D6BFE" xmlns="http://www.w3.org/2000/svg"><path d="M23.748 4.651c-.254-.124-.364.113-.512.233-.051.04-.094.09-.137.137-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.155-.708-.311-.955-.65-.172-.24-.219-.509-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.094.172.187.129.323-.082.28-.18.553-.266.833-.055.179-.137.218-.328.14a5.5 5.5 0 0 1-1.737-1.179c-.857-.828-1.631-1.743-2.597-2.46a12 12 0 0 0-.689-.47c-.985-.957.13-1.743.387-1.836.27-.098.094-.433-.778-.428-.872.003-1.67.295-2.687.685a3 3 0 0 1-.465.136 9.6 9.6 0 0 0-2.883-.101c-1.885.21-3.39 1.1-4.497 2.622C.082 8.776-.231 10.854.152 13.02c.403 2.284 1.568 4.175 3.36 5.653 1.857 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.132-.284 4.994-1.86.47.234.962.328 1.78.398.629.058 1.235-.031 1.705-.129.735-.155.684-.836.418-.961-2.155-1.004-1.682-.595-2.112-.926 1.095-1.295 2.768-3.598 3.284-6.733.05-.346.115-.834.108-1.114-.004-.171.035-.238.23-.257a4.2 4.2 0 0 0 1.545-.475c1.397-.763 1.96-2.016 2.093-3.517.02-.23-.004-.467-.247-.588M11.58 18.168c-2.088-1.642-3.101-2.183-3.52-2.16-.39.024-.32.472-.234.763.09.288.207.487.371.74.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.168-1.361-.801-2.5-1.86-3.301-3.306-.775-1.393-1.225-2.888-1.299-4.482-.02-.385.094-.522.477-.592a4.7 4.7 0 0 1 1.53-.038c2.131.311 3.946 1.264 5.467 2.774.868.86 1.525 1.887 2.202 2.89.72 1.066 1.494 2.082 2.48 2.915.348.291.626.513.892.677-.802.09-2.14.109-3.055-.615zm1.001-6.44a.306.306 0 0 1 .415-.287.3.3 0 0 1 .113.074.3.3 0 0 1 .086.214c0 .17-.136.307-.308.307a.303.303 0 0 1-.306-.307m3.11 1.596c-.2.081-.4.151-.591.16a1.25 1.25 0 0 1-.798-.254c-.274-.23-.47-.358-.551-.758a1.7 1.7 0 0 1 .015-.588c.07-.327-.007-.537-.238-.727-.188-.156-.426-.199-.689-.199a.6.6 0 0 1-.254-.078.253.253 0 0 1-.114-.358 1 1 0 0 1 .192-.21c.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.392.451.462.576.685.915.176.264.336.536.446.848.066.194-.02.353-.25.45"/></svg></span>
+            <span class="pq-logo" style="background:rgba(77,107,254,.12)" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="#4D6BFE" xmlns="http://www.w3.org/2000/svg"><path d="M23.748 4.651c-.254-.124-.364.113-.512.233-.051.04-.094.09-.137.137-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.155-.708-.311-.955-.65-.172-.24-.219-.509-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.094.172.187.129.323-.082.28-.18.553-.266.833-.055.179-.137.218-.328.14a5.5 5.5 0 0 1-1.737-1.179c-.857-.828-1.631-1.743-2.597-2.46a12 12 0 0 0-.689-.47c-.985-.957.13-1.743.387-1.836.27-.098.094-.433-.778-.428-.872.003-1.67.295-2.687.685a3 3 0 0 1-.465.136 9.6 9.6 0 0 0-2.883-.101c-1.885.21-3.39 1.1-4.497 2.622C.082 8.776-.231 10.854.152 13.02c.403 2.284 1.568 4.175 3.36 5.653 1.857 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.132-.284 4.994-1.86.47.234.962.328 1.78.398.629.058 1.235-.031 1.705-.129.735-.155.684-.836.418-.961-2.155-1.004-1.682-.595-2.112-.926 1.095-1.295 2.768-3.598 3.284-6.733.05-.346.115-.834.108-1.114-.004-.171.035-.238.23-.257a4.2 4.2 0 0 0 1.545-.475c1.397-.763 1.96-2.016 2.093-3.517.02-.23-.004-.467-.247-.588M11.58 18.168c-2.088-1.642-3.101-2.183-3.52-2.16-.39.024-.32.472-.234.763.09.288.207.487.371.74.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.168-1.361-.801-2.5-1.86-3.301-3.306-.775-1.393-1.225-2.888-1.299-4.482-.02-.385.094-.522.477-.592a4.7 4.7 0 0 1 1.53-.038c2.131.311 3.946 1.264 5.467 2.774.868.86 1.525 1.887 2.202 2.89.72 1.066 1.494 2.082 2.48 2.915.348.291.626.513.892.677-.802.09-2.14.109-3.055-.615zm1.001-6.44a.306.306 0 0 1 .415-.287.3.3 0 0 1 .113.074.3.3 0 0 1 .086.214c0 .17-.136.307-.308.307a.303.303 0 0 1-.306-.307m3.11 1.596c-.2.081-.4.151-.591.16a1.25 1.25 0 0 1-.798-.254c-.274-.23-.47-.358-.551-.758a1.7 1.7 0 0 1 .015-.588c.07-.327-.007-.537-.238-.727-.188-.156-.426-.199-.689-.199a.6.6 0 0 1-.254-.078.253.253 0 0 1-.114-.358 1 1 0 0 1 .192-.21c.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.392.451.462.576.685.915.176.264.336.536.446.848.066.194-.02.353-.25.45"/></svg></span>
             <span class="pq-btn-text">
               <span class="pq-btn-name">DeepSeek</span>
               <span class="pq-btn-desc" data-i18n="pq.deepseekDesc"></span>
@@ -97,7 +98,7 @@
             <span class="pq-arrow" data-ga-icon="caretRight"></span>
           </button>
           <button type="button" class="pq-btn" data-provider="qwen">
-            <span class="pq-logo" style="background:rgba(97,92,237,.12)" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#615CED" xmlns="http://www.w3.org/2000/svg"><path d="M23.919 14.545 20.817 9.17l1.47-2.544a.56.56 0 0 0 0-.566l-1.633-2.83a.57.57 0 0 0-.49-.283h-6.207L12.487.402a.57.57 0 0 0-.49-.284H8.732a.56.56 0 0 0-.49.284L5.139 5.775h-2.94a.56.56 0 0 0-.49.284L.077 8.887a.56.56 0 0 0 0 .567L3.18 14.83l-1.47 2.545a.56.56 0 0 0 0 .566l1.634 2.83a.57.57 0 0 0 .49.283h6.205l1.47 2.545a.57.57 0 0 0 .49.284h3.266a.57.57 0 0 0 .49-.284l3.104-5.375h2.94a.57.57 0 0 0 .49-.283l1.634-2.828a.55.55 0 0 0-.004-.568M8.733.686l1.634 2.828-1.634 2.828H21.8L20.164 9.17H7.425L5.63 6.06Zm1.306 19.801-6.205-.002 1.634-2.83h3.265L2.201 6.344h3.267q3.182 5.517 6.367 11.032zm10.124-5.66L18.53 12l-6.532 11.315-1.634-2.83c2.129-3.673 4.25-7.351 6.373-11.028h3.592l3.102 5.374z"/></svg></span>
+            <span class="pq-logo" style="background:rgba(97,92,237,.12)" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="#615CED" xmlns="http://www.w3.org/2000/svg"><path d="M23.919 14.545 20.817 9.17l1.47-2.544a.56.56 0 0 0 0-.566l-1.633-2.83a.57.57 0 0 0-.49-.283h-6.207L12.487.402a.57.57 0 0 0-.49-.284H8.732a.56.56 0 0 0-.49.284L5.139 5.775h-2.94a.56.56 0 0 0-.49.284L.077 8.887a.56.56 0 0 0 0 .567L3.18 14.83l-1.47 2.545a.56.56 0 0 0 0 .566l1.634 2.83a.57.57 0 0 0 .49.283h6.205l1.47 2.545a.57.57 0 0 0 .49.284h3.266a.57.57 0 0 0 .49-.284l3.104-5.375h2.94a.57.57 0 0 0 .49-.283l1.634-2.828a.55.55 0 0 0-.004-.568M8.733.686l1.634 2.828-1.634 2.828H21.8L20.164 9.17H7.425L5.63 6.06Zm1.306 19.801-6.205-.002 1.634-2.83h3.265L2.201 6.344h3.267q3.182 5.517 6.367 11.032zm10.124-5.66L18.53 12l-6.532 11.315-1.634-2.83c2.129-3.673 4.25-7.351 6.373-11.028h3.592l3.102 5.374z"/></svg></span>
             <span class="pq-btn-text">
               <span class="pq-btn-name">通义千问</span>
               <span class="pq-btn-desc" data-i18n="pq.qwenDesc"></span>
@@ -443,67 +444,6 @@
     </div>
   </div>
 
-  <!-- 添加模型 弹窗（模板，未实现）-->
-  <div class="modal" id="add-model-modal" hidden>
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-card" role="dialog">
-      <div class="modal-head">
-        <div class="modal-title" id="model-form-title" data-i18n="modal.addModel"></div>
-        <button class="modal-x" data-close data-i18n-title="common.close" title="">
-          <span data-ga-icon="x"></span>
-        </button>
-      </div>
-      <div class="modal-body model-form-body">
-        <div class="model-guide" id="model-guide" hidden>
-          <div class="model-guide-head">
-            <span class="model-guide-logo" id="model-guide-logo" aria-hidden="true"></span>
-            <span class="model-guide-name" id="model-guide-name"></span>
-          </div>
-          <ol class="model-guide-steps">
-            <li data-i18n="guide.step1"></li>
-            <li data-i18n="guide.step2"></li>
-            <li data-i18n="guide.step3"></li>
-          </ol>
-          <div class="model-guide-link-row">
-            <a class="model-guide-link" id="model-guide-link" href="#" target="_blank" rel="noopener noreferrer"></a>
-            <button type="button" class="model-guide-copy" id="model-guide-copy" data-i18n-title="guide.copy" title="" aria-label="copy">
-              <span data-ga-icon="copy"></span>
-            </button>
-          </div>
-          <p class="model-guide-tip" data-i18n="guide.prefillTip"></p>
-        </div>
-        <form id="add-model-form" class="model-form" autocomplete="off">
-          <label><span class="field-label"><span data-i18n="model.model"></span><span class="field-req" aria-hidden="true">*</span></span><input name="model" required data-i18n-ph="model.modelPh" maxlength="50"><span class="field-hint" data-i18n="model.modelHint"></span></label>
-          <label id="model-apikey-label"><span class="field-label"><span data-i18n="model.apikey"></span><span class="field-req" aria-hidden="true">*</span></span><input name="apikey" type="password" data-i18n-ph="model.apikeyPh" id="model-apikey-input" maxlength="200"></label>
-          <label><span class="field-label"><span data-i18n="model.apibase"></span><span class="field-req" aria-hidden="true">*</span></span><input name="apibase" required data-i18n-ph="model.apibasePh" maxlength="200"></label>
-          <div class="model-form-field"><span class="field-label"><span data-i18n="model.protocol"></span><span class="field-req" aria-hidden="true">*</span></span>
-            <div class="seg-group" role="radiogroup">
-              <label class="seg-opt"><input type="radio" name="protocol" value="oai" required><span data-i18n="model.protocolOai"></span></label>
-              <label class="seg-opt"><input type="radio" name="protocol" value="claude" required><span data-i18n="model.protocolClaude"></span></label>
-            </div>
-          </div>
-          <div class="model-form-field"><span class="field-label"><span data-i18n="model.stream"></span></span>
-            <div class="seg-group" role="radiogroup">
-              <label class="seg-opt"><input type="radio" name="stream" value="true" checked><span data-i18n="model.streamOn"></span></label>
-              <label class="seg-opt"><input type="radio" name="stream" value="false"><span data-i18n="model.streamOff"></span></label>
-            </div>
-          </div>
-          <label><span data-i18n="model.name"></span><input name="name" data-i18n-ph="model.namePh" data-optional-ph maxlength="50"></label>
-          <div class="model-form-row">
-            <label class="model-form-mini"><span data-i18n="model.retries"></span><input name="max_retries" type="text" inputmode="numeric" pattern="[0-9]*" min="1" max="20" value="5"></label>
-            <label class="model-form-mini"><span data-i18n="model.connTimeout"></span><input name="connect_timeout" type="text" inputmode="numeric" pattern="[0-9]*" min="1" max="300" value="15"></label>
-            <label class="model-form-mini"><span data-i18n="model.readTimeout"></span><input name="read_timeout" type="text" inputmode="numeric" pattern="[0-9]*" min="5" max="3600" value="300"></label>
-          </div>
-          <p class="model-form-err" id="add-model-err" hidden></p>
-          <div class="model-form-actions">
-            <button type="button" class="set-btn ghost" data-close data-i18n="common.cancel"></button>
-            <button type="submit" class="set-btn primary"><span data-i18n="model.save"></span></button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
   <div class="modal" id="confirm-modal" hidden>
     <div class="modal-backdrop" data-close></div>
     <div class="modal-card confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
@@ -580,82 +520,6 @@
     </div>
   </div>
 
-  <!-- 配置 弹窗 -->
-  <div class="modal" id="settings-modal" hidden>
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-card" role="dialog">
-      <div class="modal-head">
-        <div class="modal-title" data-i18n="modal.settings"></div>
-        <button class="modal-x" data-close data-i18n-title="common.close" title="">
-          <span data-ga-icon="x"></span>
-        </button>
-      </div>
-      <div class="modal-body set-body">
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.appearance"></div>
-          <div class="appear-cards" id="appearance-seg" role="radiogroup">
-            <button class="appear-card sel" type="button" data-appearance="light" role="radio" aria-checked="true">
-              <span class="appear-preview appear-preview-light" aria-hidden="true"></span>
-              <span class="appear-name" data-i18n="appearance.light"></span>
-            </button>
-            <button class="appear-card" type="button" data-appearance="dark" role="radio" aria-checked="false">
-              <span class="appear-preview appear-preview-dark" aria-hidden="true"></span>
-              <span class="appear-name" data-i18n="appearance.dark"></span>
-            </button>
-          </div>
-          <div class="set-toggle-row" id="plain-ui-row" hidden>
-            <span class="set-toggle-label" data-i18n="set.plainUi"></span>
-            <button class="set-switch" type="button" id="plain-ui-switch" role="switch" aria-checked="false">
-              <span class="set-switch-knob" aria-hidden="true"></span>
-            </button>
-          </div>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" id="chat-font-label" data-i18n="set.fontSize"></div>
-          <div class="chat-font-panel">
-            <div class="chat-font-stepper" id="chat-font-stepper" role="slider"
-              aria-valuemin="10" aria-valuemax="20" aria-valuenow="14"
-              aria-valuetext="14px" aria-labelledby="chat-font-label" tabindex="0">
-              <div class="chat-font-segments" id="chat-font-segments"></div>
-            </div>
-            <span class="chat-font-value" id="chat-font-value" aria-hidden="true">14px</span>
-            <div class="chat-font-scale" aria-hidden="true">
-              <span class="chat-font-scale-min">10</span>
-              <span class="chat-font-scale-max">20</span>
-            </div>
-          </div>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.lang"></div>
-          <div class="model-list lang-list" id="lang-list"></div>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.model"></div>
-          <div class="model-list" id="model-list"></div>
-          <button class="set-btn" id="add-model-btn" type="button">
-            <span data-ga-icon="plus"></span>
-            <span data-i18n="set.addModel"></span>
-          </button>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.features"></div>
-          <button class="set-btn" id="import-mykey-btn" type="button">
-            <span data-ga-icon="fileText"></span>
-            <span data-i18n="set.importMykey"></span>
-          </button>
-          <input type="file" id="import-mykey-input" accept=".py,text/plain" hidden>
-          <button class="set-btn set-btn-follow" id="export-mykey-btn" type="button">
-            <span data-ga-icon="folderSimple"></span>
-            <span data-i18n="set.exportMykey"></span>
-          </button>
-          <button class="set-btn set-btn-follow" id="settings-services-btn" type="button">
-            <span data-ga-icon="broadcast"></span>
-            <span data-i18n="set.serviceManager"></span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- 图片预览 lightbox -->
