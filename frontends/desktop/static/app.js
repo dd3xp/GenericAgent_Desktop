@@ -53,6 +53,8 @@ const gaServiceStore = {
   get: (id) => _serviceById[id],
 };
 
+let bridgeUiOffline = false;
+
 /* ═══════════════ Bridge 适配（HTTP 命令 + WS 状态） ═══════════════ */
 (function initGaBridge() {
   const listeners = new Map();
@@ -88,6 +90,13 @@ const gaServiceStore = {
     emit('service-state', msg);
   }
 
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const tauriInvoke = (name, args = {}) => {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (!invoke) throw new Error('Tauri IPC is not available');
+    return invoke(name, args);
+  };
+
   async function http(path, options = {}) {
     const headers = Object.assign({}, options.headers || {});
     const init = Object.assign({}, options, { headers });
@@ -106,6 +115,23 @@ const gaServiceStore = {
       throw err;
     }
     return data;
+  }
+
+  async function waitBridgeStatus(timeoutMs = 20000) {
+    const deadline = Date.now() + timeoutMs;
+    let lastErr = null;
+    while (Date.now() < deadline) {
+      try {
+        const status = await http('/status');
+        wsRetries = 0;
+        connectWs();
+        return status;
+      } catch (err) {
+        lastErr = err;
+        await sleep(350);
+      }
+    }
+    throw lastErr || new Error('Bridge did not become ready');
   }
 
   function connectWs() {
@@ -190,8 +216,11 @@ const gaServiceStore = {
         return http(`/services/logs?id=${encodeURIComponent(id)}&tail=${encodeURIComponent(tail)}`);
       }
       case 'services/panel': return http('/services/panel');
+      case 'services/bridge/exit': return http('/services/bridge/exit', { method: 'POST' });
       case 'services/mykey/get': return http('/services/mykey');
       case 'services/mykey/save': return http('/services/mykey', { method: 'POST', body: params || {} });
+      case 'services/conductor/model/get': return http('/services/conductor/model');
+      case 'services/conductor/model/save': return http('/services/conductor/model', { method: 'POST', body: params || {} });
       case 'app/path/selectGaRoot': return http('/config');
       case 'list_continuable_sessions': return { sessions: [] };
       case 'restore_session': throw new Error('restore_session is not implemented in web2 bridge');
@@ -216,10 +245,35 @@ const gaServiceStore = {
     return res;
   }
 
+  async function spawnBridge() {
+    connectWs();
+    try {
+      const status = await http('/status');
+      bridgeUiOffline = false;
+      return status;
+    } catch (_) {
+      await tauriInvoke('start_bridge');
+      const status = await waitBridgeStatus();
+      bridgeUiOffline = false;
+      return status;
+    }
+  }
+
+  async function exitBridge() {
+    const res = await rpc('services/bridge/exit');
+    cachedBridgeReady = null;
+    if (ws) {
+      try { ws.close(); } catch (_) {}
+    }
+    return res;
+  }
+
   window.ga = {
     platform: navigator.platform.toLowerCase().includes('mac') ? 'darwin' : 'win32',
     startBridge: async () => { connectWs(); return http('/status'); },
+    spawnBridge,
     stopBridge: async () => ({ ok: true }),
+    exitBridge,
     checkStatus: () => rpc('app/status', {}),
     getConfig: () => rpc('app/config/get', {}),
     saveConfig: (cfg) => rpc('app/config/save', cfg || {}),
@@ -233,6 +287,10 @@ const gaServiceStore = {
     getServicePanel: () => rpc('services/panel', {}),
     getMykeyContent: () => rpc('services/mykey/get', {}),
     saveMykeyContent: (content) => rpc('services/mykey/save', { content }),
+    getConductorModel: () => rpc('services/conductor/model/get', {}),
+    saveConductorModel: (llmNo) => rpc('services/conductor/model/save', { llmNo }),
+    tauriInvoke,
+    setBridgeUiOffline: (offline) => { bridgeUiOffline = !!offline; },
     pollSession: (sessionId, afterId = 0) => rpc('session/poll', { sessionId, afterId }),
     rpc,
     onBridgeMessage: (cb) => on('bridge-message', cb),
@@ -256,29 +314,33 @@ const I18N = {
     'app.title': 'GenericAgent 桌面版',
     'brand.sub': '桌面终端',
     'nav.chat': '聊天', 'nav.services': '后台服务', 'nav.channels': '消息通道', 'nav.status': '状态面板',
-    'nav.collab': '指挥家', 'nav.token': 'Token 统计',
+    'nav.collab': '指挥家', 'nav.token': '用量',
     'foot.settings': '配置', 'foot.ver': 'GenericAgent · 桌面版',
     'chat.startTitle': '开始对话', 'chat.startSub': '直接输入，或点预设功能一键启动',
     'preset.butler.t': '指挥家', 'preset.butler.d': '复杂任务自动拆解，只需查看进度和简报',
     'preset.plan.t': 'Plan 模式', 'preset.plan.d': '加载 Plan SOP，按探索→规划→执行→验证流程',
     'preset.goal.t': 'Goal 模式', 'preset.goal.d': '设定目标，自主完成',
-    'preset.explore.t': '自主探索', 'preset.explore.d': '自动浏览并周期汇总',
+    'preset.autonomous.t': '自主行动', 'preset.autonomous.d': '按 SOP 规划/执行任务,产出报告(reflect/autonomous.py 同源)',
     'preset.hive.t': 'Hive 协作', 'preset.hive.d': '多 worker 协同攻坚',
     'preset.review.t': '深度复核', 'preset.review.d': '挑刺式质量把关',
+    'preset.findwork.t': '找点事做', 'preset.findwork.d': '分析当前情况,推荐一批让你感兴趣的 TODO',
     'preset.mine.t': '我的·周报', 'preset.mine.d': '自定义：抓本周提交并写周报',
     'preset.add.t': '自定义', 'preset.add.d': '任意一句话存为功能',
-    'composer.placeholder': '输入消息… (Enter 发送, Shift+Enter 换行)',
+    'composer.placeholder': 'GA 能帮你做些什么？',
     'search.placeholder': '搜索会话…', 'conv.new': '新对话',
     'ctx.pin': '置顶', 'ctx.unpin': '取消置顶', 'ctx.rename': '重命名', 'ctx.del': '删除',
     'common.close': '关闭', 'common.more': '更多', 'common.optional': '选填', 'common.save': '保存',
     'modal.preset': '预设功能', 'modal.addModel': '添加模型', 'modal.editModel': '编辑模型', 'modal.settings': '配置',
     'modal.customPreset': '自定义预设',
+    'modal.editCustomPreset': '编辑任务',
     'customPreset.titlePh': '标题，例如「写周报」',
     'customPreset.promptPh': 'Prompt 内容，发送时会作为消息提交',
     'customPreset.empty': '标题和 Prompt 不能为空',
     'customPreset.removeTitle': '删除',
+    'customPreset.editTitle': '编辑',
     'builtinPreset.restoreBtn': '恢复默认预设',
-    'set.appearance': '外观', 'set.plainUi': '素色', 'set.fontSize': '聊天字号', 'set.lang': '语言', 'set.model': '模型', 'set.addModel': '添加模型',
+    'set.appearance': '外观', 'set.plainUi': '素色', 'set.fontSize': '聊天字号', 'set.lang': '语言', 'set.model': '模型', 'set.addModel': '添加模型', 'set.features': '功能', 'set.importMykey': '导入已有模型配置（mykey.py）', 'set.exportMykey': '导出当前模型配置', 'set.serviceManager': '后台服务管理',
+    'shortcut.askConfirm': '是否在桌面创建 GenericAgent 快捷方式？',
     'appearance.light': '浅色', 'appearance.dark': '深色',
     'set.noModels': '暂无模型，点击下方添加',
     'lang.zh': '简体中文', 'lang.en': 'English',
@@ -286,10 +348,11 @@ const I18N = {
     'model.apikey': 'API Key', 'model.apikeyPh': 'sk-...', 'model.apikeyKeep': '留空则保持原 Key 不变',
     'model.apibase': 'API 地址', 'model.apibasePh': 'https://.../v1/messages',
     'model.protocol': '协议', 'model.protocolPick': '请选择…', 'model.protocolOai': 'OpenAI 兼容 (chat/completions)', 'model.protocolClaude': 'Anthropic (Claude /v1/messages)',
+    'model.stream': '响应方式', 'model.streamOn': '流式', 'model.streamOff': '非流式',
     'model.model': '模型', 'model.modelPh': 'model 参数名',
     'model.modelHint': '须与中转站/官方文档中的 model 字段完全一致',
     'model.retries': '重试 (次)', 'model.connTimeout': '连接超时 (s)', 'model.readTimeout': '读取超时 (s)',
-    'model.save': '保存', 'common.cancel': '取消', 'common.edit': '编辑', 'common.delete': '删除',
+    'model.save': '保存', 'common.cancel': '取消', 'common.confirm': '确认', 'common.edit': '编辑', 'common.delete': '删除',
     'pq.title': '快速接入官方模型', 'pq.sub': '填好 API Key 即可使用', 'pq.toggle': '展开 / 收起',
     'pq.deepseekDesc': '官方 API · OpenAI 兼容', 'pq.qwenDesc': '通义千问 · 阿里云百炼',
     'guide.step1': '点击下方链接，登录后创建并复制 API Key',
@@ -297,16 +360,20 @@ const I18N = {
     'guide.step3': '点击保存，即可在模型列表中选用',
     'guide.prefillTip': '已为你预填 API 地址、协议与模型，可按需修改',
     'guide.getKey': '获取 {name} 的 API Key', 'guide.copy': '复制链接', 'guide.copied': '链接已复制',
-    'err.modelSave': '保存失败', 'err.modelRequired': '请填写模型、API Key 和 API 地址',
+    'err.modelSave': '保存失败', 'err.modelSwitch': '切换模型失败', 'err.modelRequired': '请填写模型、API Key 和 API 地址',
     'err.modelDelete': '删除失败', 'err.modelDeleteLast': '至少保留一个模型',
     'confirm.modelDelete': '确定删除该模型配置？',
+    'model.aggregation': '渠道组（自动故障转移）', 'model.aggregationShort': '渠道组', 'model.aggregationDesc': '按顺序尝试，失败自动切换到下一个',
+    'model.emptyMixin': '尚未加入模型',
+    'model.addToMixin': '加入渠道组', 'model.inMixin': '已在渠道组', 'model.removeFromMixin': '移出渠道组', 'model.alreadyInMixin': '已在渠道组中', 'model.dragReorder': '拖拽调整顺序',
+    'err.mixinFailed': '操作失败',
     'page.services.title': '后台服务', 'page.services.sub': 'IM 消息通道与后台进程，集中查看、启停与日志',
     'page.channels.title': '消息通道', 'page.channels.sub': '后台 IM 进程：列表、启停与日志（同 hub.pyw）',
     'page.status.title': '状态面板', 'page.status.sub': 'hub.pyw 管理的后台进程/服务，集中查看与启停',
     'page.collab.title': '指挥家', 'page.collab.sub': '交代目标，自动拆活与跟进',
     'collab.progressTitle': '分工进度',
     'collab.progressEmpty': '还没有任务在执行。告诉指挥家你的目标后，这里会显示拆分后的处理进度。',
-    'collab.placeholder': '描述你想完成的目标，Enter 发送…',
+    'collab.placeholder': '请对指挥家描述你想完成的目标',
     'collab.guideTitle': '把要完成的事告诉指挥家',
     'collab.guideWhen': '适合需要多步处理、要花一些时间才能完成的目标。日常聊天和快问快答，请用左侧「聊天」。',
     'collab.guideStep1t': '描述目标',
@@ -326,7 +393,7 @@ const I18N = {
     'collab.plusMenu': '更多操作',
     'collab.switchMode': '切换模式',
     'collab.typing': '指挥家正在处理',
-    'collab.offline': '无法连接 Conductor（8900）。请确认服务已启动且本地已穿透 8900 端口。',
+    'collab.offline': '无法连接指挥家服务，请确认后端已启动。',
     'collab.retry': '重试',
     'collab.reconnect': '连接断开，正在重连… 已保留上次任务进度。',
     'collab.reconnectIn': '{n} 秒后重试',
@@ -339,11 +406,11 @@ const I18N = {
     'collab.timeMin': '{n} 分钟前',
     'collab.timeHr': '{n} 小时前',
     'collab.timeDay': '{n} 天前',
-    'page.token.title': 'Token 统计', 'page.token.sub': '每会话与累计的 token 用量及缓存率',
-    'status.connecting': '连接中…', 'status.ready': '就绪', 'status.running': '运行中',
-    'status.disconnected': '未连接', 'status.stopped': '已停止', 'status.idle': '空闲',
+    'page.token.title': '用量', 'page.token.sub': '每会话与累计用量及缓存率',
+    'status.connecting': '正在连接…', 'status.ready': '服务在线', 'status.running': '处理中',
+    'status.disconnected': '服务离线', 'status.stopped': '已停止', 'status.idle': '待命',
     'conv.emptyList': '暂无会话，点「＋ 新对话」开始', 'conv.defaultTitle': '新对话',
-    'err.bridge': 'bridge 未连接', 'err.newSession': '新建会话失败', 'err.poll': '轮询失败', 'err.stop': '停止失败',
+    'err.bridge': '服务未响应', 'err.newSession': '新建会话失败', 'err.poll': '轮询失败', 'err.stop': '停止失败',
     'err.interruptTimeout': '等待上一轮停止超时，请稍后再试',
     'sys.interruptPrev.hint': '已停止上一轮，正在处理新消息',
     'chat.interrupting': '正在停止上一轮…',
@@ -355,7 +422,7 @@ const I18N = {
     'upload.button': '上传文件',
     'upload.tooLarge': '文件过大或数量超限', 'upload.empty': '跳过空文件',
     'upload.failed': '上传失败',
-    'err.charLimit': '已达字数上限（{n}），发送时将自动截断', 'err.numMax': '不能超过 {n}',
+    'err.charLimit': '已达字数上限（{n}），发送时将自动截断', 'err.charLimitReached': '已达字数上限（{n}）', 'err.numMax': '不能超过 {n}',
     'file.openFailed': '无法打开文件',
     'file.kindGeneric': '文件',
     'file.kindDoc': '文档',
@@ -384,19 +451,22 @@ const I18N = {
     'ch.loading': '加载中…', 'ch.empty': '未发现 IM 进程脚本',
     'ch.logEmpty': '暂无日志',
     'err.channelLoad': '加载失败', 'err.channelStart': '启动失败', 'err.channelStop': '停止失败',
+    'err.mykeyImport': '导入模型配置失败',
+    'err.mykeyExport': '导出模型配置失败',
     'err.channelNotConfigured': '请先在 mykey.py 中配置该平台',
     'sys.channelStarted': '已启动', 'sys.channelStopped': '已停止',
     'modal.channelLogs': '进程日志',
     'modal.mykeyConfig': 'mykey.py 配置',
     'sys.configSaved': '配置已保存',
-    'st.starting': '启动中…', 'st.stopping': '停止中…',
-    'st.online': '在线', 'st.offline': '离线', 'st.error': '错误', 'st.running': '运行', 'st.abnormal': '异常',
-    'act.configure': '配置', 'act.logs': '日志', 'act.restart': '重启', 'act.stop': '停止', 'act.start': '启动',
+    'sys.mykeyImported': '模型配置已导入',
+    'sys.mykeyExported': '模型配置已导出',
+    'st.starting': '启动中…', 'st.stopping': '停止中…', 'st.online': '在线', 'st.offline': '离线', 'st.error': '错误', 'st.running': '运行', 'st.abnormal': '异常',
+    'act.configure': '配置', 'act.logs': '日志', 'act.restart': '重启', 'act.stop': '停止', 'act.start': '启动', 'act.exit': '退出',
     'act.copy': '复制', 'act.copied': '已复制', 'act.copyTex': 'TeX', 'act.send': '发送',
-    'proc.imbotWechat': 'imbot · 微信', 'proc.imbotDing': 'imbot · 钉钉', 'proc.scheduler': '定时任务调度',
+    'proc.imbotWechat': 'imbot · 微信', 'proc.imbotDing': 'imbot · 钉钉', 'proc.scheduler': '定时任务调度', 'proc.conductor': '指挥家',
     'cm.scheduling': '调度中', 'cm.running': '执行中', 'cm.idleSt': '空闲',
     'cm.master': '已派 3 子任务', 'cm.w1': '子任务：抓取数据', 'cm.w2': '子任务：复核结果', 'cm.sub': '等待派单',
-    'tok.total': '累计 token', 'tok.cost': '缓存率', 'tok.today': '今日 token', 'tok.tabAll': '聊天', 'tok.tabConductor': '指挥家', 'tok.condTotal': '指挥家累计', 'tok.condCurrent': '指挥家本次', 'tok.condTip': '指挥家消耗的 token 不计入聊天累计 token 中', 'tok.condOffline': '无法连接指挥家（8900）', 'tok.disclaimer': '不同 API 网站的计费价格可能会有差异，请以实际网站为准。', 'tok.chartToggle': '趋势图',
+    'tok.total': '累计', 'tok.cost': '缓存率', 'tok.today': '今日', 'tok.tabAll': '聊天', 'tok.tabConductor': '指挥家', 'tok.condTotal': '指挥家累计', 'tok.condCurrent': '指挥家本次', 'tok.condTip': '指挥家消耗不计入聊天累计', 'tok.condOffline': '指挥家服务离线', 'tok.disclaimer': '不同 API 网站的计费价格可能会有差异，请以实际网站为准。',
     'tok.colSession': '会话', 'tok.colIn': '输入', 'tok.colOut': '输出', 'tok.colCacheW': '缓存写入', 'tok.colCache': '缓存读取', 'tok.colCost': '成本',
     'tok.from': '从', 'tok.to': '到', 'tok.reset': '重置', 'tok.noData': '暂无记录', 'tok.deleted': '此会话已删除',
     'tok.pricingUnknown': '⚠ 此模型计费规则尚未明确，按默认估算',
@@ -404,9 +474,10 @@ const I18N = {
     'tok.priceCacheW': '缓存写入: $', 'tok.priceCacheR': '缓存读取: $',
     'presetPrompt.goal': '进入 Goal 模式：读 L3 goal mode SOP，自主达成我接下来描述的目标。',
     'presetPrompt.plan': '进入 Plan 模式：先读 memory/plan_sop.md，按其中「探索→规划→执行→验证」流程，等我接下来描述要做的任务。',
-    'presetPrompt.explore': '进入自主探索模式：自动浏览并定期向我汇总要点。',
+    'presetPrompt.autonomous': '🤖 进入自主行动模式：阅读 memory/autonomous_operation_sop.md，按 SOP 选取或规划任务,独立执行并产出报告。',
     'presetPrompt.hive': '启动 Goal Hive 模式：按 hive SOP 拉起多个 worker 协同完成我接下来的目标。',
     'presetPrompt.review': '进入监察者模式：对刚才的产出严格挑刺、逐项复核并报告问题。',
+    'presetPrompt.findwork': '按照自主行动的规划部分，充分分析我的情况，给我生成一批 TODO，务必让我感兴趣。',
     'presetPrompt.mine': '抓取本周的 git 提交并写一份周报。',
     'ask.banner': 'GA 等你回答',
     'ask.replyHint': '在下方输入框回复',
@@ -416,29 +487,33 @@ const I18N = {
     'app.title': 'GenericAgent Desktop',
     'brand.sub': 'Desktop terminal',
     'nav.chat': 'Chat', 'nav.services': 'Services', 'nav.channels': 'Channels', 'nav.status': 'Status',
-    'nav.collab': 'Conductor', 'nav.token': 'Token usage',
+    'nav.collab': 'Conductor', 'nav.token': 'Usage',
     'foot.settings': 'Settings', 'foot.ver': 'GenericAgent · Desktop',
     'chat.startTitle': 'Start a conversation', 'chat.startSub': 'Type a message, or pick a preset',
     'preset.butler.t': 'Conductor', 'preset.butler.d': 'Auto-decompose complex tasks; just check progress and briefings',
     'preset.plan.t': 'Plan mode', 'preset.plan.d': 'Load Plan SOP — explore→plan→execute→verify',
     'preset.goal.t': 'Goal mode', 'preset.goal.d': 'Set a goal, run autonomously',
-    'preset.explore.t': 'Auto explore', 'preset.explore.d': 'Browse & summarize periodically',
+    'preset.autonomous.t': 'Autonomous mode', 'preset.autonomous.d': 'Plan/execute tasks per SOP and produce reports (same as reflect/autonomous.py)',
     'preset.hive.t': 'Hive', 'preset.hive.d': 'Multi-worker collaboration',
     'preset.review.t': 'Deep review', 'preset.review.d': 'Strict quality check',
+    'preset.findwork.t': 'Find me work', 'preset.findwork.d': 'Analyze my context and suggest a batch of interesting TODOs',
     'preset.mine.t': 'My · Weekly', 'preset.mine.d': 'Custom: weekly report from commits',
     'preset.add.t': 'Custom', 'preset.add.d': 'Save any prompt as a function',
-    'composer.placeholder': 'Type a message… (Enter to send, Shift+Enter for newline)',
+    'composer.placeholder': 'What can GA do for you?',
     'search.placeholder': 'Search chats…', 'conv.new': 'New chat',
     'ctx.pin': 'Pin', 'ctx.unpin': 'Unpin', 'ctx.rename': 'Rename', 'ctx.del': 'Delete',
     'common.close': 'Close', 'common.more': 'More', 'common.optional': 'Optional', 'common.save': 'Save',
     'modal.preset': 'Presets', 'modal.addModel': 'Add model', 'modal.editModel': 'Edit model', 'modal.settings': 'Settings',
     'modal.customPreset': 'Custom preset',
+    'modal.editCustomPreset': 'Edit task',
     'customPreset.titlePh': 'Title, e.g. "Weekly report"',
     'customPreset.promptPh': 'Prompt body — sent as the message when clicked',
     'customPreset.empty': 'Title and Prompt cannot be empty',
     'customPreset.removeTitle': 'Delete',
+    'customPreset.editTitle': 'Edit',
     'builtinPreset.restoreBtn': 'Restore defaults',
-    'set.appearance': 'Appearance', 'set.plainUi': 'Plain', 'set.fontSize': 'Chat font size', 'set.lang': 'Language', 'set.model': 'Model', 'set.addModel': 'Add model',
+    'set.appearance': 'Appearance', 'set.plainUi': 'Plain', 'set.fontSize': 'Chat font size', 'set.lang': 'Language', 'set.model': 'Model', 'set.addModel': 'Add model', 'set.features': 'Features', 'set.importMykey': 'Import model config (mykey.py)', 'set.exportMykey': 'Export current model config', 'set.serviceManager': 'Service manager',
+    'shortcut.askConfirm': 'Create a desktop shortcut for GenericAgent?',
     'appearance.light': 'Light', 'appearance.dark': 'Dark',
     'set.noModels': 'No models yet — add one below',
     'lang.zh': '简体中文', 'lang.en': 'English',
@@ -446,10 +521,11 @@ const I18N = {
     'model.apikey': 'API Key', 'model.apikeyPh': 'sk-...', 'model.apikeyKeep': 'Leave blank to keep the current key',
     'model.apibase': 'API base URL', 'model.apibasePh': 'https://.../v1/messages',
     'model.protocol': 'Protocol', 'model.protocolPick': 'Select…', 'model.protocolOai': 'OpenAI-compatible (chat/completions)', 'model.protocolClaude': 'Anthropic (Claude /v1/messages)',
+    'model.stream': 'Response', 'model.streamOn': 'Stream', 'model.streamOff': 'Non-stream',
     'model.model': 'Model', 'model.modelPh': 'model parameter name',
     'model.modelHint': 'Must match the model field in your provider docs exactly',
     'model.retries': 'Retries (×)', 'model.connTimeout': 'Connect (s)', 'model.readTimeout': 'Read (s)',
-    'model.save': 'Save', 'common.cancel': 'Cancel', 'common.edit': 'Edit', 'common.delete': 'Delete',
+    'model.save': 'Save', 'common.cancel': 'Cancel', 'common.confirm': 'Confirm', 'common.edit': 'Edit', 'common.delete': 'Delete',
     'pq.title': 'Quick connect a model', 'pq.sub': 'Add your API key to get started', 'pq.toggle': 'Expand / collapse',
     'pq.deepseekDesc': 'Official API · OpenAI-compatible', 'pq.qwenDesc': 'Tongyi Qwen · Aliyun Bailian',
     'guide.step1': 'Open the link, sign in, then create & copy your API key',
@@ -457,16 +533,20 @@ const I18N = {
     'guide.step3': 'Click Save — then pick it from the model list',
     'guide.prefillTip': 'API base, protocol and model are pre-filled — edit if needed',
     'guide.getKey': 'Get your {name} API key', 'guide.copy': 'Copy link', 'guide.copied': 'Link copied',
-    'err.modelSave': 'Save failed', 'err.modelRequired': 'Model, API Key and base URL are required',
+    'err.modelSave': 'Save failed', 'err.modelSwitch': 'Failed to switch model', 'err.modelRequired': 'Model, API Key and base URL are required',
     'err.modelDelete': 'Delete failed', 'err.modelDeleteLast': 'At least one model is required',
     'confirm.modelDelete': 'Delete this model profile?',
+    'model.aggregation': 'Channel group (auto failover)', 'model.aggregationShort': 'Channel group', 'model.aggregationDesc': 'Tries in order, switches to the next on failure',
+    'model.emptyMixin': 'No models added yet',
+    'model.addToMixin': 'Add to channel', 'model.inMixin': 'In channel', 'model.removeFromMixin': 'Remove from channel', 'model.alreadyInMixin': 'Already in the channel', 'model.dragReorder': 'Drag to reorder',
+    'err.mixinFailed': 'Operation failed',
     'page.services.title': 'Services', 'page.services.sub': 'IM channels and background processes — view, start/stop, logs',
     'page.channels.title': 'Channels', 'page.channels.sub': 'Background IM processes: list, start/stop, logs (hub.pyw style)',
     'page.status.title': 'Status', 'page.status.sub': 'Background processes/services managed by hub.pyw',
     'page.collab.title': 'Conductor', 'page.collab.sub': 'Describe a goal — split, delegate, and follow up',
     'collab.progressTitle': 'Progress',
     'collab.progressEmpty': 'No tasks running yet. After you describe a goal to Conductor, split tasks will appear here.',
-    'collab.placeholder': 'Describe your goal, Enter to send…',
+    'collab.placeholder': 'Describe the goal you want to accomplish',
     'collab.guideTitle': 'Tell Conductor what you want done',
     'collab.guideWhen': 'Best for multi-step goals that take a while. For everyday chat and quick questions, use Chat in the sidebar.',
     'collab.guideStep1t': 'Describe your goal',
@@ -486,7 +566,7 @@ const I18N = {
     'collab.plusMenu': 'More actions',
     'collab.switchMode': 'Switch mode',
     'collab.typing': 'Conductor is working',
-    'collab.offline': 'Cannot reach Conductor (8900). Start the service and forward port 8900.',
+    'collab.offline': 'Cannot reach the service. Make sure the backend is running.',
     'collab.retry': 'Retry',
     'collab.reconnect': 'Disconnected — reconnecting… Your last progress is kept.',
     'collab.reconnectIn': 'Retry in {n}s',
@@ -499,11 +579,11 @@ const I18N = {
     'collab.timeMin': '{n}m ago',
     'collab.timeHr': '{n}h ago',
     'collab.timeDay': '{n}d ago',
-    'page.token.title': 'Token usage', 'page.token.sub': 'Per-session and total token usage & cache rate',
-    'status.connecting': 'Connecting…', 'status.ready': 'Ready', 'status.running': 'Running',
-    'status.disconnected': 'Disconnected', 'status.stopped': 'Stopped', 'status.idle': 'Idle',
+    'page.token.title': 'Usage', 'page.token.sub': 'Per-session and total usage & cache rate',
+    'status.connecting': 'Connecting…', 'status.ready': 'Service online', 'status.running': 'Working…',
+    'status.disconnected': 'Service offline', 'status.stopped': 'Stopped', 'status.idle': 'Standby',
     'conv.emptyList': 'No chats yet — click “＋ New chat”', 'conv.defaultTitle': 'New chat',
-    'err.bridge': 'Bridge not connected', 'err.newSession': 'Failed to create session', 'err.poll': 'Polling failed', 'err.stop': 'Stop failed',
+    'err.bridge': 'Service not responding', 'err.newSession': 'Failed to create session', 'err.poll': 'Polling failed', 'err.stop': 'Stop failed',
     'err.interruptTimeout': 'Timed out waiting for the previous reply to stop — try again',
     'sys.interruptPrev.hint': 'Previous reply stopped — processing new message',
     'chat.interrupting': 'Stopping previous reply…',
@@ -515,7 +595,7 @@ const I18N = {
     'upload.button': 'Upload file',
     'upload.tooLarge': 'File too large or limit reached', 'upload.empty': 'Skipped empty file',
     'upload.failed': 'Upload failed',
-    'err.charLimit': 'Character limit reached ({n}), text will be truncated on send', 'err.numMax': 'Cannot exceed {n}',
+    'err.charLimit': 'Character limit reached ({n}), text will be truncated on send', 'err.charLimitReached': 'Character limit reached ({n})', 'err.numMax': 'Cannot exceed {n}',
     'file.openFailed': 'Cannot open file',
     'file.kindGeneric': 'File',
     'file.kindDoc': 'Document',
@@ -544,19 +624,22 @@ const I18N = {
     'ch.loading': 'Loading…', 'ch.empty': 'No IM process scripts found',
     'ch.logEmpty': 'No log output yet',
     'err.channelLoad': 'Failed to load', 'err.channelStart': 'Start failed', 'err.channelStop': 'Stop failed',
+    'err.mykeyImport': 'Failed to import model config',
+    'err.mykeyExport': 'Failed to export model config',
     'err.channelNotConfigured': 'Configure this platform in mykey.py first',
     'sys.channelStarted': 'Started', 'sys.channelStopped': 'Stopped',
     'modal.channelLogs': 'Process logs',
     'modal.mykeyConfig': 'mykey.py',
     'sys.configSaved': 'Configuration saved',
-    'st.starting': 'Starting…', 'st.stopping': 'Stopping…',
-    'st.online': 'Online', 'st.offline': 'Offline', 'st.error': 'Error', 'st.running': 'Running', 'st.abnormal': 'Error',
-    'act.configure': 'Configure', 'act.logs': 'Logs', 'act.restart': 'Restart', 'act.stop': 'Stop', 'act.start': 'Start',
+    'sys.mykeyImported': 'Model config imported',
+    'sys.mykeyExported': 'Model config exported',
+    'st.starting': 'Starting…', 'st.stopping': 'Stopping…', 'st.online': 'Online', 'st.offline': 'Offline', 'st.error': 'Error', 'st.running': 'Running', 'st.abnormal': 'Error',
+    'act.configure': 'Configure', 'act.logs': 'Logs', 'act.restart': 'Restart', 'act.stop': 'Stop', 'act.start': 'Start', 'act.exit': 'Exit',
     'act.copy': 'Copy', 'act.copied': 'Copied', 'act.copyTex': 'TeX', 'act.send': 'Send',
-    'proc.imbotWechat': 'imbot · WeChat', 'proc.imbotDing': 'imbot · DingTalk', 'proc.scheduler': 'Scheduler',
+    'proc.imbotWechat': 'imbot · WeChat', 'proc.imbotDing': 'imbot · DingTalk', 'proc.scheduler': 'Scheduler', 'proc.conductor': 'Conductor',
     'cm.scheduling': 'Scheduling', 'cm.running': 'Running', 'cm.idleSt': 'Idle',
     'cm.master': 'Dispatched 3 subtasks', 'cm.w1': 'Subtask: fetch data', 'cm.w2': 'Subtask: review results', 'cm.sub': 'Waiting for tasks',
-    'tok.total': 'Total tokens', 'tok.cost': 'Cache rate', 'tok.today': 'Today tokens', 'tok.tabAll': 'Chat', 'tok.tabConductor': 'Conductor', 'tok.condTotal': 'Conductor Total', 'tok.condCurrent': 'Conductor Current', 'tok.condTip': 'Conductor tokens are not included in chat totals', 'tok.condOffline': 'Cannot reach Conductor (8900)', 'tok.disclaimer': 'Pricing may vary by API provider. Please refer to the actual website.', 'tok.chartToggle': 'Trend',
+    'tok.total': 'Total', 'tok.cost': 'Cache rate', 'tok.today': 'Today', 'tok.tabAll': 'Chat', 'tok.tabConductor': 'Conductor', 'tok.condTotal': 'Conductor Total', 'tok.condCurrent': 'Conductor Current', 'tok.condTip': 'Conductor usage is not included in chat totals', 'tok.condOffline': 'Service offline', 'tok.disclaimer': 'Pricing may vary by API provider. Please refer to the actual website.',
     'tok.colSession': 'Session', 'tok.colIn': 'Input', 'tok.colOut': 'Output', 'tok.colCacheW': 'Cache write', 'tok.colCache': 'Cache read', 'tok.colCost': 'Cost',
     'tok.from': 'From', 'tok.to': 'To', 'tok.reset': 'Reset', 'tok.noData': 'No records', 'tok.deleted': 'Session deleted',
     'tok.pricingUnknown': '⚠ Pricing not confirmed, using defaults',
@@ -564,9 +647,10 @@ const I18N = {
     'tok.priceCacheW': 'Cache write: $', 'tok.priceCacheR': 'Cache read: $',
     'presetPrompt.goal': 'Enter Goal mode: read the L3 goal-mode SOP and autonomously achieve the goal I describe next.',
     'presetPrompt.plan': 'Enter Plan mode: first read memory/plan_sop.md, follow its explore→plan→execute→verify flow, and wait for the task I describe next.',
-    'presetPrompt.explore': 'Enter auto-explore mode: browse autonomously and periodically summarize key points to me.',
+    'presetPrompt.autonomous': '🤖 Enter autonomous mode: read memory/autonomous_operation_sop.md, follow the SOP to pick or plan a task, execute independently, and produce a report.',
     'presetPrompt.hive': 'Start Goal Hive mode: per the hive SOP, spawn multiple workers to collaboratively achieve the goal I describe next.',
     'presetPrompt.review': 'Enter reviewer mode: strictly scrutinize the previous output, review item by item and report issues.',
+    'presetPrompt.findwork': 'Following the autonomous planning section, analyze my situation thoroughly and generate a batch of TODOs that genuinely interest me.',
     'presetPrompt.mine': 'Collect this week\'s git commits and write a weekly report.',
     'ask.banner': 'GA is waiting for your answer',
     'ask.replyHint': 'Reply in the input below',
@@ -574,7 +658,7 @@ const I18N = {
   },
 };
 const LANGS = ['zh', 'en'];
-const STORE = { lang: 'ga_lang', theme: 'ga_theme', appearance: 'ga_appearance', plain: 'ga_plain', fontSize: 'ga_font_size', llmNo: 'ga_llm_no' };
+const STORE = { lang: 'ga_lang', theme: 'ga_theme', appearance: 'ga_appearance', plain: 'ga_plain', fontSize: 'ga_font_size' };
 const APPEARANCE_IDS = ['light', 'dark'];
 const CHAT_FONT_MIN = 10;
 const CHAT_FONT_MAX = 20;
@@ -617,7 +701,6 @@ function syncBootCache() {
   localStorage.setItem(STORE.fontSize, String(chatFontSize));
   if (plainUi) localStorage.setItem(STORE.plain, '1');
   else localStorage.removeItem(STORE.plain);
-  localStorage.setItem(STORE.llmNo, String(state.llmNo));
 }
 async function persistUiPrefs() {
   try {
@@ -666,6 +749,11 @@ function applyI18n() {
   });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.setAttribute('title', t(el.dataset.i18nTitle)); });
   renderLangList();
+  // 语言切换后重算激活模型 chip 文案；若当前会话已有渠道组运行态模型，保留运行态而非退回首选项
+  const _ap = (state.modelProfiles || []).find(p => (p.id ?? 0) === state.llmNo);
+  if (_ap) state.modelName = modelDisplayName(_ap);
+  if (_ap?.kind === 'mixin' && state.liveModel?.sessionId === state.activeId) applyLiveModel(state.liveModel);
+  else if (typeof updateModelChip === 'function') updateModelChip();
   window.gaRefreshModelGuide?.();
   window.collabRetranslate?.();
   syncAskUserUi();
@@ -842,11 +930,85 @@ const closeModals = () => document.querySelectorAll('.modal').forEach(m => {
   m.querySelectorAll('.field-limit-hint').forEach(h => h.style.display = 'none');
 });
 const bindClick = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+function openServiceManagerFromSettings() {
+  closeModals();
+  gaGoPage('services');
+  setSvcTab('status');
+  void loadStatusPanel();
+}
 bindClick('add-model-btn', (e) => {
   e.stopPropagation();
   openAddModelForm();
 });
 bindClick('settings-btn',  (e) => { e.stopPropagation(); openSettings(); });
+bindClick('settings-services-btn', (e) => { e.stopPropagation(); openServiceManagerFromSettings(); });
+
+const importMykeyInput = document.getElementById('import-mykey-input');
+async function importMykeyFromFile(file) {
+  if (!file) return;
+  const text = await file.text();
+  if (!text.trim()) throw new Error(t('err.mykeyImport'));
+  await window.ga.saveMykeyContent(text);
+  await loadModelProfiles();
+}
+bindClick('import-mykey-btn', (e) => {
+  e.stopPropagation();
+  if (importMykeyInput) importMykeyInput.click();
+});
+if (importMykeyInput) {
+  importMykeyInput.addEventListener('change', async () => {
+    const file = importMykeyInput.files && importMykeyInput.files[0];
+    importMykeyInput.value = '';
+    if (!file) return;
+    try {
+      await importMykeyFromFile(file);
+      showChanToast(t('sys.mykeyImported'), '', 'ok');
+    } catch (err) {
+      showChanToast(t('err.mykeyImport'), err.message || String(err), 'err');
+    }
+  });
+}
+async function exportMykeyToDir() {
+  const res = await window.ga.getMykeyContent();
+  const content = (res && res.content) ? String(res.content) : '';
+  if (!content.trim()) throw new Error(t('err.mykeyExport'));
+  // WebView2：独立缓存 + 无目录选择/下载；走 Tauri 原生另存为
+  if (window.__TAURI__?.core?.invoke) {
+    const path = await window.ga.tauriInvoke('export_mykey', { content });
+    if (!path) return;
+    showChanToast(t('sys.mykeyExported'), path, 'ok');
+    return;
+  }
+  if (typeof window.showDirectoryPicker === 'function') {
+    const dir = await window.showDirectoryPicker();
+    const handle = await dir.getFileHandle('mykey.py', { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(content);
+    await writable.close();
+    showChanToast(t('sys.mykeyExported'), '', 'ok');
+    return;
+  }
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mykey.py';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showChanToast(t('sys.mykeyExported'), '', 'ok');
+}
+bindClick('export-mykey-btn', async (e) => {
+  e.stopPropagation();
+  try {
+    await exportMykeyToDir();
+  } catch (err) {
+    if (err && (err.name === 'AbortError' || err.code === 20)) return;
+    showChanToast(t('err.mykeyExport'), err.message || String(err), 'err');
+  }
+});
 // 侧边栏「快速接入」：点击官方模型按钮 → 打开预填好的添加模型表单
 const pqEl = document.getElementById('provider-quickstart');
 if (pqEl) pqEl.addEventListener('click', (e) => {
@@ -865,7 +1027,8 @@ if (pqEl && pqToggle) {
   let pqCollapsed = false;
   try { pqCollapsed = localStorage.getItem('ga_pq_collapsed') === '1'; } catch (_) {}
   applyPq(pqCollapsed);
-  const togglePq = () => {
+  const togglePq = (e) => {
+    if (e) e.stopPropagation();
     pqCollapsed = !pqEl.classList.contains('collapsed');
     applyPq(pqCollapsed);
     try { localStorage.setItem('ga_pq_collapsed', pqCollapsed ? '1' : '0'); } catch (_) {}
@@ -892,6 +1055,49 @@ document.querySelectorAll('.modal').forEach(m =>
     }
   }));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModals(); });
+
+function showConfirmDialog({ title, message, okText, okKind = 'primary', cancelText } = {}) {
+  const modal = document.getElementById('confirm-modal');
+  if (!modal) return Promise.resolve(false);
+  const titleEl = document.getElementById('confirm-title');
+  const msgEl = document.getElementById('confirm-message');
+  const okBtn = document.getElementById('confirm-ok');
+  const cancelBtn = document.getElementById('confirm-cancel');
+  if (titleEl) titleEl.textContent = title || t('common.confirm');
+  if (msgEl) msgEl.textContent = message || '';
+  if (cancelBtn) cancelBtn.textContent = cancelText || t('common.cancel');
+  if (okBtn) {
+    okBtn.textContent = okText || t('common.confirm');
+    okBtn.classList.toggle('danger', okKind === 'danger');
+    okBtn.classList.toggle('primary', okKind !== 'danger');
+  }
+  modal.hidden = false;
+  return new Promise(resolve => {
+    let done = false;
+    const finish = (yes) => {
+      if (done) return;
+      done = true;
+      modal.hidden = true;
+      cleanup();
+      resolve(yes);
+    };
+    const onOk = (e) => { e.preventDefault(); e.stopPropagation(); finish(true); };
+    const onCancel = (e) => { e.preventDefault(); e.stopPropagation(); finish(false); };
+    const onClose = (e) => { if (e.target.closest('[data-close]')) finish(false); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } };
+    const cleanup = () => {
+      okBtn?.removeEventListener('click', onOk);
+      cancelBtn?.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onClose, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+    okBtn?.addEventListener('click', onOk);
+    cancelBtn?.addEventListener('click', onCancel);
+    modal.addEventListener('click', onClose, true);
+    document.addEventListener('keydown', onKey, true);
+    okBtn?.focus();
+  });
+}
 
 /* ═══════════════ Markdown ═══════════════ */
 if (typeof marked !== 'undefined') {
@@ -1469,8 +1675,8 @@ function syncAskUserUi() {
 /* ───────────── 统一复制 SVG Icon ───────────── */
 // Phosphor 图标助手：把 window.gaIcon(name) 包一层，给动态渲染的 UI 用，与静态 [data-ga-icon] 保持一致
 const GA_ICON = (name, className = '') => (typeof window.gaIcon === 'function' ? window.gaIcon(name, className) : '');
-const SVG_COPY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-const SVG_CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const SVG_COPY_ICON = GA_ICON('copy');
+const SVG_CHECK_ICON = GA_ICON('check');
 
 function postRenderEnhance(containerEl) {
   if (!containerEl) return;
@@ -1528,6 +1734,7 @@ function postRenderEnhance(containerEl) {
 const state = {
   sessions: new Map(), activeId: null, bridgeReady: false,
   llmNo: 0, modelProfiles: [], modelName: null,
+  conductorLlmNo: null, conductorModelName: null,
   runtime: new Map(),
   pendingFiles: [],
   fileSeq: 0,
@@ -1556,7 +1763,8 @@ async function loadSessions() {
       state.sessions.set(s.id, {
         id: s.id, bridgeSessionId: s.id, title: s.title,
         messages: [], untitled: s.untitled ?? true,
-        pinned: s.pinned ?? false, lastActiveTs: s.updatedAt || s.createdAt
+        pinned: s.pinned ?? false, lastActiveTs: s.updatedAt || s.createdAt,
+        llmNo: s.model && s.model.llmNo != null ? s.model.llmNo : null
       });
     }
     // 刷新后固定恢复「上次正在看的会话」（前端持久化的 ga_active），而不是 bridge 的
@@ -2133,7 +2341,7 @@ function msgNode(msg) {
       ? `<div class="user-files">${msg.files.map(f => {
           const name = f.name || 'file';
           const sub = fileSubLabel(name);
-          return `<div class="file-chip" data-path="${escapeHtml(f.path || '')}" data-name="${escapeHtml(name)}"><span class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="fc-meta"><span class="fc-name">${escapeHtml(name)}</span><span class="fc-sub">${escapeHtml(sub)}</span></span></div>`;
+          return `<div class="file-chip" data-path="${escapeHtml(f.path || '')}" data-name="${escapeHtml(name)}"><span class="fc-icon">${GA_ICON('fileText')}</span><span class="fc-meta"><span class="fc-name">${escapeHtml(name)}</span><span class="fc-sub">${escapeHtml(sub)}</span></span></div>`;
         }).join('')}</div>`
       : '';
     const chipText = renderMsgTextWithChips(shown, (kind, n) => {
@@ -2660,6 +2868,15 @@ function setActiveSession(id) {
   if (id) localStorage.setItem('ga_active', id);  // 持久化当前会话，刷新后固定恢复它
   const sess = state.sessions.get(id);
   if (!sess) return;
+  // 切会话:回显该会话绑定的模型(后端权威)。未绑定(null)则保持当前全局默认显示。
+  if (sess.llmNo != null && sess.llmNo !== state.llmNo) {
+    state.llmNo = sess.llmNo;
+    state.liveModel = null;
+    const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === sess.llmNo);
+    if (p) state.modelName = modelDisplayName(p);
+    updateModelChip();
+    renderSettingsModels();
+  }
   if (msgsEl) msgsEl.innerHTML = '';
   const r = rt(sess);
   r.draftEl = null;
@@ -2900,8 +3117,39 @@ function applyPollResult(sess, result) {
   for (const msg of (result.messages || [])) upsert(sess, msg, false);
   const busy = result.status === 'running' || !!result.partial;
   setBusy(sess, busy);
-  if (isActive(sess)) applyPlanPayload(sess, result.plan);
+  if (isActive(sess)) {
+    applyPlanPayload(sess, result.plan);
+    applyLiveModel(result.model, sess);
+  }
   return busy;
+}
+
+/** 用后端运行态模型刷新 chip + 选择器。后端是权威:
+ *  - 同步该会话绑定的 llmNo(live.llmNo)到 sess/state，切回会话能正确回显；
+ *  - mixin: 显示「渠道组（当前子模型）」，跟随故障转移；
+ *  - native: 显示后端真正在用的模型名(live.current)，而非前端静态选择。 */
+function applyLiveModel(live, sess = activeSess()) {
+  if (!live) return;
+  // 回写该会话绑定的模型下标(权威来自后端)。
+  if (live.llmNo != null && sess) sess.llmNo = live.llmNo;
+  if (isActive(sess) && live.llmNo != null && state.llmNo !== live.llmNo) {
+    state.llmNo = live.llmNo;
+    renderSettingsModels();
+  }
+  const selected = (state.modelProfiles || []).find(p => (p.id ?? 0) === state.llmNo);
+  if (!isActive(sess)) return;
+  if (selected && selected.kind === 'mixin') {
+    if (!live.isMixin || !live.current) return;
+    state.liveModel = { ...live, sessionId: sess?.id || state.activeId };
+    const label = `${t('model.aggregationShort')}${lang === 'en' ? ' (' : '（'}${profileLabel(live.current) || live.current}${lang === 'en' ? ')' : '）'}`;
+    if (state.modelName !== label) { state.modelName = label; updateModelChip(); }
+    return;
+  }
+  // native: chip 跟随后端实际模型名(没拿到运行态时回退到选中 profile 的静态名)
+  state.liveModel = null;
+  const label = (live.current ? (profileLabel(live.current) || live.current) : null)
+    || (selected ? modelDisplayName(selected) : null);
+  if (label && state.modelName !== label) { state.modelName = label; updateModelChip(); }
 }
 
 /** hydrate 批量灌历史，避免逐条 appendMessage 触发全量重绘 */
@@ -3119,7 +3367,7 @@ async function sendPrompt(text) {
         localStorage.setItem('ga_active', sess.id);  // 会话 id 因 bridge 重建而变更，同步持久化
       }
     }
-    const res = await window.ga.rpc('session/prompt', { sessionId: sid, prompt: composedPrompt, display: text, llmNo: state.llmNo,
+    const res = await window.ga.rpc('session/prompt', { sessionId: sid, prompt: composedPrompt, display: text,
       files: previewFiles, imageMetas: previewImgs.map(im => ({ name: im.name, path: im.path })) });
     if (res?.error) throw new Error(res.error.message || res.error);
     removeUsedPendingFiles(usedFiles);
@@ -3194,6 +3442,15 @@ function showError(text) {
   if (sess) { const m = { role: 'error', content: text }; sess.messages.push(m); appendMessage(sess, m); }
   else console.error(text);
 }
+let _toastTimer = null;
+function showToast(text) {
+  let el = document.getElementById('ga-toast');
+  if (!el) { el = document.createElement('div'); el.id = 'ga-toast'; el.className = 'ga-toast'; document.body.appendChild(el); }
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
 async function handleSlash(cmd) {
   const name = cmd.slice(1).split(/\s+/)[0];
   switch (name) {
@@ -3208,6 +3465,13 @@ async function handleSlash(cmd) {
 // 预设卡：按 data-preset 解耦（与翻译后的标题无关）
 document.querySelectorAll('.feature-grid').forEach(grid => {
   grid.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.fc-edit');
+    if (editBtn) {
+      e.stopPropagation();
+      const cp = state.customPresets.find(p => p.id === editBtn.dataset.editId);
+      if (cp) openCustomPresetEditor(cp);
+      return;
+    }
     const xBtn = e.target.closest('.fc-x');
     if (xBtn) {
       e.stopPropagation();
@@ -3240,14 +3504,148 @@ document.querySelectorAll('.feature-grid').forEach(grid => {
 function updateModelChip() {
   const name = state.modelName || '';
   if (modelNameEl) modelNameEl.textContent = name;
-  if (collabModelNameEl) collabModelNameEl.textContent = name;
+  if (collabModelNameEl) collabModelNameEl.textContent = state.conductorModelName || name;
+}
+function modelDisplayName(p, fallbackName) {
+  if (p && p.kind === 'mixin') {
+    // 静态回退显示「渠道组（首选模型名）」；运行后由 applyLiveModel 切到真实当前子模型。
+    const primary = (p.members || [])[0];
+    if (!primary) return t('model.aggregation');
+    const open = lang === 'en' ? ' (' : '（', close = lang === 'en' ? ')' : '）';
+    return `${t('model.aggregationShort')}${open}${profileLabel(primary) || primary}${close}`;
+  }
+  return profileLabel(fallbackName ?? (p && p.name)) || (fallbackName ?? (p && p.name)) || null;
 }
 async function selectModel(id, name) {
   state.llmNo = id;
-  state.modelName = profileLabel(name) || name || null;
+  state.liveModel = null;
+  const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === id);
+  state.modelName = modelDisplayName(p, name);
   updateModelChip();
   renderSettingsModels();
-  await persistUiPrefs();
+  // 申请切换:有活跃会话 -> 绑定到该会话(后端权威);同时更新全局默认(供新建会话初始值)。
+  // 后端是真相源,前端只发请求;申请失败则回滚显示并提示。
+  const sess = activeSess();
+  if (sess && sess.bridgeSessionId) {
+    const prevNo = sess.llmNo;
+    sess.llmNo = id;
+    try {
+      await bridgeFetch(`/session/${encodeURIComponent(sess.bridgeSessionId)}/model`, { method: 'POST', body: { llmNo: id } });
+    } catch (ex) {
+      // 后端没切成功:回滚到该会话原绑定,避免前端显示与后端不一致。
+      sess.llmNo = prevNo;
+      if (prevNo != null) {
+        state.llmNo = prevNo;
+        const pp = (state.modelProfiles || []).find(x => (x.id ?? 0) === prevNo);
+        if (pp) state.modelName = modelDisplayName(pp);
+        updateModelChip();
+        renderSettingsModels();
+      }
+      showChanToast(t('err.modelSwitch'), ex.message || '', 'err');
+      return;
+    }
+  } else if (sess) {
+    sess.llmNo = id;
+  }
+  await persistUiPrefs();  // 写 ui.llmNo 全局默认
+}
+async function selectConductorModel(id, name) {
+  state.conductorLlmNo = id;
+  const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === id);
+  state.conductorModelName = modelDisplayName(p, name);
+  updateModelChip();
+  try { await window.ga.saveConductorModel(id); } catch (_) {}
+}
+async function addToMixin(id) {
+  try {
+    const res = await bridgeFetch(`/model-profiles/${id}/mixin`, { method: 'POST', body: {} });
+    if (res?.ok === false || res?.error) throw new Error(res.error || t('err.mixinFailed'));
+    state.modelProfiles = normalizeProfiles(res.profiles || []);
+    renderSettingsModels();
+  } catch (ex) { showChanToast(t('err.mixinFailed'), ex.message || '', 'err'); }
+}
+async function removeFromMixin(id) {
+  try {
+    const res = await bridgeFetch(`/model-profiles/${id}/mixin`, { method: 'DELETE', body: {} });
+    if (res?.ok === false || res?.error) throw new Error(res.error || t('err.mixinFailed'));
+    state.modelProfiles = normalizeProfiles(res.profiles || []);
+    renderSettingsModels();
+  } catch (ex) { showChanToast(t('err.mixinFailed'), ex.message || '', 'err'); }
+}
+async function reorderMixin(members) {
+  try {
+    const res = await bridgeFetch('/model-profiles/mixin/order', { method: 'PUT', body: { members } });
+    if (res?.ok === false || res?.error) throw new Error(res.error || t('err.mixinFailed'));
+    state.modelProfiles = normalizeProfiles(res.profiles || []);
+    renderSettingsModels();
+    const active = state.modelProfiles.find(p => (p.id ?? 0) === state.llmNo);
+    if (active) { state.modelName = modelDisplayName(active); updateModelChip(); }
+  } catch (ex) { showChanToast(t('err.mixinFailed'), ex.message || '', 'err'); renderSettingsModels(); }
+}
+function flipReorder(container, mutate) {
+  const rows = [...container.querySelectorAll('.model-member:not(.dragging)')];
+  const first = new Map(rows.map(el => [el, el.getBoundingClientRect()]));
+  mutate();
+  rows.forEach(el => {
+    const a = first.get(el), b = el.getBoundingClientRect();
+    if (!a) return;
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) return;
+    el.style.transition = 'none';
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(() => {
+      el.style.transition = 'transform .14s cubic-bezier(.2,.8,.2,1)';
+      el.style.transform = '';
+    });
+  });
+}
+function bindMixinDrag(body, members) {
+  let drag = null;
+  const clear = () => {
+    body.querySelectorAll('.model-member').forEach(x => x.classList.remove('dragging', 'drag-over'));
+    document.body.classList.remove('mixin-dragging');
+  };
+  body.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.model-member-drag');
+    if (!handle || e.button !== 0) return;
+    const row = handle.closest('.model-member');
+    if (!row) return;
+    e.preventDefault();
+    handle.setPointerCapture?.(e.pointerId);
+    drag = { handle, row, name: row.dataset.member, order: [...members], original: [...members], pointerId: e.pointerId, over: null };
+    row.classList.add('dragging');
+    document.body.classList.add('mixin-dragging');
+  });
+  body.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.model-member');
+    if (!over || !body.contains(over) || over === drag.row) return;
+    const rect = over.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    const overKey = `${over.dataset.member}:${after ? 'after' : 'before'}`;
+    if (overKey === drag.over) return;
+    drag.over = overKey;
+    const from = drag.order.indexOf(drag.name), overIdx = drag.order.indexOf(over.dataset.member);
+    if (from < 0 || overIdx < 0) return;
+    const [moved] = drag.order.splice(from, 1);
+    let insertAt = drag.order.indexOf(over.dataset.member) + (after ? 1 : 0);
+    drag.order.splice(insertAt, 0, moved);
+    flipReorder(body, () => {
+      if (after) body.insertBefore(drag.row, over.nextSibling);
+      else body.insertBefore(drag.row, over);
+    });
+  });
+  const finish = (e) => {
+    if (!drag) return;
+    drag.handle.releasePointerCapture?.(drag.pointerId);
+    const changed = JSON.stringify(drag.order) !== JSON.stringify(drag.original);
+    const next = drag.order;
+    drag = null;
+    clear();
+    if (changed) reorderMixin(next);
+  };
+  body.addEventListener('pointerup', finish);
+  body.addEventListener('pointercancel', finish);
 }
 const MODEL_ACT_EDIT = GA_ICON('pencilSimple');
 const MODEL_ACT_DEL = GA_ICON('trash');
@@ -3271,7 +3669,7 @@ const PROVIDER_PRESETS = {
   deepseek: {
     label: 'DeepSeek', descKey: 'pq.deepseekDesc',
     protocol: 'oai', apibase: 'https://api.deepseek.com/v1',
-    model: 'deepseek-chat', name: 'DeepSeek',
+    model: 'deepseek-v4-pro', name: 'DeepSeek',
     keyUrl: 'https://platform.deepseek.com/api_keys',
     color: '#4D6BFE', tint: 'rgba(77,107,254,.12)',
     logo: '<svg viewBox="0 0 24 24" fill="#4D6BFE" xmlns="http://www.w3.org/2000/svg"><path d="M23.748 4.651c-.254-.124-.364.113-.512.233-.051.04-.094.09-.137.137-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.155-.708-.311-.955-.65-.172-.24-.219-.509-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.094.172.187.129.323-.082.28-.18.553-.266.833-.055.179-.137.218-.328.14a5.5 5.5 0 0 1-1.737-1.179c-.857-.828-1.631-1.743-2.597-2.46a12 12 0 0 0-.689-.47c-.985-.957.13-1.743.387-1.836.27-.098.094-.433-.778-.428-.872.003-1.67.295-2.687.685a3 3 0 0 1-.465.136 9.6 9.6 0 0 0-2.883-.101c-1.885.21-3.39 1.1-4.497 2.622C.082 8.776-.231 10.854.152 13.02c.403 2.284 1.568 4.175 3.36 5.653 1.857 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.132-.284 4.994-1.86.47.234.962.328 1.78.398.629.058 1.235-.031 1.705-.129.735-.155.684-.836.418-.961-2.155-1.004-1.682-.595-2.112-.926 1.095-1.295 2.768-3.598 3.284-6.733.05-.346.115-.834.108-1.114-.004-.171.035-.238.23-.257a4.2 4.2 0 0 0 1.545-.475c1.397-.763 1.96-2.016 2.093-3.517.02-.23-.004-.467-.247-.588M11.58 18.168c-2.088-1.642-3.101-2.183-3.52-2.16-.39.024-.32.472-.234.763.09.288.207.487.371.74.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.168-1.361-.801-2.5-1.86-3.301-3.306-.775-1.393-1.225-2.888-1.299-4.482-.02-.385.094-.522.477-.592a4.7 4.7 0 0 1 1.53-.038c2.131.311 3.946 1.264 5.467 2.774.868.86 1.525 1.887 2.202 2.89.72 1.066 1.494 2.082 2.48 2.915.348.291.626.513.892.677-.802.09-2.14.109-3.055-.615zm1.001-6.44a.306.306 0 0 1 .415-.287.3.3 0 0 1 .113.074.3.3 0 0 1 .086.214c0 .17-.136.307-.308.307a.303.303 0 0 1-.306-.307m3.11 1.596c-.2.081-.4.151-.591.16a1.25 1.25 0 0 1-.798-.254c-.274-.23-.47-.358-.551-.758a1.7 1.7 0 0 1 .015-.588c.07-.327-.007-.537-.238-.727-.188-.156-.426-.199-.689-.199a.6.6 0 0 1-.254-.078.253.253 0 0 1-.114-.358 1 1 0 0 1 .192-.21c.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.392.451.462.576.685.915.176.264.336.536.446.848.066.194-.02.353-.25.45"/></svg>',
@@ -3279,7 +3677,7 @@ const PROVIDER_PRESETS = {
   qwen: {
     label: '通义千问', descKey: 'pq.qwenDesc',
     protocol: 'oai', apibase: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    model: 'qwen-plus', name: '通义千问',
+    model: 'qwen3.6-max-preview', name: '通义千问',
     keyUrl: 'https://bailian.console.aliyun.com/?apiKey=1',
     color: '#615CED', tint: 'rgba(97,92,237,.12)',
     logo: '<svg viewBox="0 0 24 24" fill="#615CED" xmlns="http://www.w3.org/2000/svg"><path d="M23.919 14.545 20.817 9.17l1.47-2.544a.56.56 0 0 0 0-.566l-1.633-2.83a.57.57 0 0 0-.49-.283h-6.207L12.487.402a.57.57 0 0 0-.49-.284H8.732a.56.56 0 0 0-.49.284L5.139 5.775h-2.94a.56.56 0 0 0-.49.284L.077 8.887a.56.56 0 0 0 0 .567L3.18 14.83l-1.47 2.545a.56.56 0 0 0 0 .566l1.634 2.83a.57.57 0 0 0 .49.283h6.205l1.47 2.545a.57.57 0 0 0 .49.284h3.266a.57.57 0 0 0 .49-.284l3.104-5.375h2.94a.57.57 0 0 0 .49-.283l1.634-2.828a.55.55 0 0 0-.004-.568M8.733.686l1.634 2.828-1.634 2.828H21.8L20.164 9.17H7.425L5.63 6.06Zm1.306 19.801-6.205-.002 1.634-2.83h3.265L2.201 6.344h3.267q3.182 5.517 6.367 11.032zm10.124-5.66L18.53 12l-6.532 11.315-1.634-2.83c2.129-3.673 4.25-7.351 6.373-11.028h3.592l3.102 5.374z"/></svg>',
@@ -3368,17 +3766,21 @@ async function openEditModelForm(id) {
       const pv = /claude/i.test(p.varName || '') ? 'claude' : 'oai';
       const pr = form.querySelector(`input[name="protocol"][value="${pv}"]`);
       if (pr) pr.checked = true;
+      // 回填流式开关(默认流式)
+      const sv = (p.stream === false) ? 'false' : 'true';
+      const sr = form.querySelector(`input[name="stream"][value="${sv}"]`);
+      if (sr) sr.checked = true;
     }
     setModelApikeyMode(false);
     openModal('add-model-modal');
     applyI18n();
   } catch (ex) {
-    alert(ex.message || t('err.modelSave'));
+    showChanToast(t('err.modelSave'), ex.message || '', 'err');
   }
 }
 async function deleteModel(id, name) {
   const label = profileLabel(name) || name || ('#' + id);
-  if (!confirm(`${t('confirm.modelDelete')}\n${label}`)) return;
+  if (!(await showConfirmDialog({ title: t('common.delete'), message: `${t('confirm.modelDelete')}\n${label}`, okText: t('common.delete'), okKind: 'danger' }))) return;
   try {
     const res = await bridgeFetch(`/model-profiles/${id}`, { method: 'DELETE', body: {} });
     if (res?.ok === false || res?.error) throw new Error(res.error || t('err.modelDelete'));
@@ -3396,7 +3798,7 @@ async function deleteModel(id, name) {
     renderSettingsModels();
   } catch (ex) {
     const msg = ex.message || '';
-    alert(msg.includes('last profile') ? t('err.modelDeleteLast') : (msg || t('err.modelDelete')));
+    showChanToast(msg.includes('last profile') ? t('err.modelDeleteLast') : t('err.modelDelete'), msg.includes('last profile') ? '' : msg, 'err');
   }
 }
 function renderSettingsModels() {
@@ -3404,26 +3806,79 @@ function renderSettingsModels() {
   if (!box) return;
   box.innerHTML = '';
   const list = state.modelProfiles || [];
-  if (!list.length) {
+  const mixin = list.find(p => p.kind === 'mixin');
+  const natives = list.filter(p => p.kind !== 'mixin');
+  const byName = new Map(natives.map(p => [p.name, p]));
+
+  // ── 渠道组（自动故障转移）：可展开组；本身也可被选为激活模型 ──
+  if (mixin) {
+    const gid = mixin.id ?? 0;
+    const members = mixin.members || [];
+    const expanded = state.mixinExpanded !== false; // 默认展开
+    const group = document.createElement('div');
+    group.className = 'model-group';
+    const head = document.createElement('label');
+    head.className = 'model-row model-row--mixin' + (state.llmNo === gid ? ' sel' : '');
+    head.innerHTML = `<input type="radio" name="model-pick"${state.llmNo === gid ? ' checked' : ''}><span class="model-mixin-caret" data-act="toggle">${GA_ICON(expanded ? 'caretDown' : 'caretRight')}</span><span class="model-row-name">${escapeHtml(t('model.aggregation'))}</span>`;
+    head.querySelector('[data-act="toggle"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); state.mixinExpanded = !expanded; renderSettingsModels(); });
+    head.addEventListener('click', (e) => { if (e.target.closest('[data-act="toggle"]')) return; e.preventDefault(); selectModel(gid, mixin.name); });
+    group.appendChild(head);
+    if (expanded) {
+      const body = document.createElement('div');
+      body.className = 'model-mixin-body';
+      if (!members.length) {
+        const em = document.createElement('div');
+        em.className = 'model-mixin-empty'; em.textContent = t('model.emptyMixin');
+        body.appendChild(em);
+      } else {
+        members.forEach((mName, i) => {
+          const mp = byName.get(mName);
+          const row = document.createElement('div');
+          row.className = 'model-member';
+          row.dataset.member = mName;
+          row.innerHTML = `<button type="button" class="model-member-drag" data-act="drag" title="${escapeHtml(t('model.dragReorder'))}" aria-label="${escapeHtml(t('model.dragReorder'))}"><span class="grip-dot"></span></button><span class="model-member-name">${escapeHtml(profileLabel(mName) || mName)}</span><button type="button" class="model-act model-act-del" data-act="unmix" title="${escapeHtml(t('model.removeFromMixin'))}">${GA_ICON('x')}</button>`;
+          row.querySelector('[data-act="unmix"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); if (mp) removeFromMixin(mp.id ?? 0); });
+          body.appendChild(row);
+        });
+        bindMixinDrag(body, members);
+      }
+      group.appendChild(body);
+    }
+    box.appendChild(group);
+  }
+
+  // ── 独立模型（聚合渠道组已自带分隔，这里不再单列标题）──
+  if (!natives.length) {
     const empty = document.createElement('div');
     empty.className = 'set-empty'; empty.textContent = t('set.noModels');
-    box.appendChild(empty); return;
+    box.appendChild(empty);
+  } else {
+    for (const p of natives) {
+      const id = p.id ?? 0;
+      const label = profileLabel(p.name) || p.name || ('#' + id);
+      const row = document.createElement('label');
+      row.className = 'model-row' + (state.llmNo === id ? ' sel' : '');
+      // 独立列表按钮统一为「加入渠道组」（➕）；移除只在渠道组展开区做。
+      // 已在渠道组的，按钮仍是「加入」，但点击只提示「已在渠道组中」，并用 is-in 给个淡淡的视觉区分。
+      const mixToggle = !mixin ? '' : `<button type="button" class="model-act model-act-addmix${p.inMixin ? ' is-in' : ''}" data-act="addmix" title="${escapeHtml(p.inMixin ? t('model.alreadyInMixin') : t('model.addToMixin'))}">${GA_ICON('plus')}</button>`;
+      row.innerHTML = `<input type="radio" name="model-pick"${state.llmNo === id ? ' checked' : ''}><span class="model-row-name">${escapeHtml(label)}</span><span class="model-row-actions">${mixToggle}<button type="button" class="model-act" data-act="edit" title="${escapeHtml(t('common.edit'))}">${MODEL_ACT_EDIT}</button><button type="button" class="model-act model-act-del" data-act="delete" title="${escapeHtml(t('common.delete'))}">${MODEL_ACT_DEL}</button></span>`;
+      row.querySelector('[data-act="edit"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openEditModelForm(id); });
+      row.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); deleteModel(id, p.name); });
+      const addBtn = row.querySelector('[data-act="addmix"]');
+      if (addBtn) addBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); e.preventDefault();
+        if (p.inMixin) showToast(t('model.alreadyInMixin'));
+        else addToMixin(id);
+      });
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.model-row-actions')) return;
+        e.preventDefault();
+        selectModel(id, p.name);
+      });
+      box.appendChild(row);
+    }
   }
-  for (const p of list) {
-    const id = p.id ?? 0;
-    const label = profileLabel(p.name) || p.name || ('#' + id);
-    const row = document.createElement('label');
-    row.className = 'model-row' + (state.llmNo === id ? ' sel' : '');
-    row.innerHTML = `<input type="radio" name="model-pick"${state.llmNo === id ? ' checked' : ''}><span class="model-row-name">${escapeHtml(label)}</span><span class="model-row-actions"><button type="button" class="model-act" data-act="edit" title="${escapeHtml(t('common.edit'))}">${MODEL_ACT_EDIT}</button><button type="button" class="model-act model-act-del" data-act="delete" title="${escapeHtml(t('common.delete'))}">${MODEL_ACT_DEL}</button></span>`;
-    row.querySelector('[data-act="edit"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openEditModelForm(id); });
-    row.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); deleteModel(id, p.name); });
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('.model-row-actions')) return;
-      e.preventDefault();
-      selectModel(id, p.name);
-    });
-    box.appendChild(row);
-  }
+  applyI18n();
 }
 function openSettings() {
   openModal('settings-modal');
@@ -3441,7 +3896,13 @@ async function loadModelProfiles() {
     const active = state.modelProfiles.find(p => p.active) || state.modelProfiles[0];
     if (active) {
       state.llmNo = active.id ?? 0;
-      state.modelName = profileLabel(active.name) || active.name || null;
+      state.modelName = modelDisplayName(active);
+    }
+    // conductor chip 的显示名只在 loadBridgeConfig/selectConductorModel 更新；导入密钥等
+    // 仅刷新 profiles 的路径若不在此一并重算，会让 conductor chip 停在旧文案(如空渠道组)。
+    if (state.conductorLlmNo != null) {
+      const cp = state.modelProfiles.find(p => (p.id ?? 0) === state.conductorLlmNo);
+      if (cp) state.conductorModelName = modelDisplayName(cp);
     }
     updateModelChip();
     renderSettingsModels();
@@ -3453,10 +3914,13 @@ const collabModelMenu = document.getElementById('cdb-model-menu');
 function renderModelMenu(menuEl) {
   if (!menuEl) return;
   const list = state.modelProfiles || [];
+  const selectedNo = menuEl === collabModelMenu ? state.conductorLlmNo : state.llmNo;
+  const selectedName = menuEl === collabModelMenu ? state.conductorModelName : state.modelName;
   const rows = list.map((p, i) => {
     const no = (p.id ?? i);
-    const isActive = (state.llmNo === no) ? ' active' : '';
-    return `<div class="ga-menu-item${isActive}" data-llmno="${no}">${escapeHtml(p.name || '')}</div>`;
+    const isActive = (selectedNo === no) ? ' active' : '';
+    const label = (isActive && p.kind === 'mixin' && selectedName) ? selectedName : modelDisplayName(p);
+    return `<div class="ga-menu-item${isActive}" data-llmno="${no}">${escapeHtml(label || '')}</div>`;
   });
   menuEl.innerHTML = rows.join('');
   applyI18n();
@@ -3468,6 +3932,7 @@ function openModelMenu(chipEl, menuEl) {
   closeAllModelMenus();
   renderModelMenu(menuEl);
   menuEl.hidden = false;
+  chipEl.classList.add('open');
   const chipRect = chipEl.getBoundingClientRect();
   const composer = chipEl.closest('.composer');
   if (composer) {
@@ -3479,8 +3944,10 @@ function openModelMenu(chipEl, menuEl) {
 function closeAllModelMenus() {
   if (modelMenu) modelMenu.hidden = true;
   if (collabModelMenu) collabModelMenu.hidden = true;
+  if (modelChip) modelChip.classList.remove('open');
+  if (collabModelChip) collabModelChip.classList.remove('open');
 }
-function bindModelMenuItemClick(menuEl) {
+function bindModelMenuItemClick(menuEl, onSelect) {
   if (!menuEl) return;
   menuEl.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -3489,18 +3956,20 @@ function bindModelMenuItemClick(menuEl) {
     const no = parseInt(item.dataset.llmno, 10);
     if (Number.isNaN(no)) return;
     const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === no);
-    selectModel(no, (p && p.name) || '');
+    onSelect(no, (p && p.name) || '');
     closeAllModelMenus();
   });
 }
-bindModelMenuItemClick(modelMenu);
-bindModelMenuItemClick(collabModelMenu);
+bindModelMenuItemClick(modelMenu, selectModel);
+bindModelMenuItemClick(collabModelMenu, selectConductorModel);
 if (modelChip) modelChip.addEventListener('click', (e) => {
   e.preventDefault(); e.stopPropagation();
+  if (modelMenu && !modelMenu.hidden) { closeAllModelMenus(); return; }
   openModelMenu(modelChip, modelMenu);
 });
 if (collabModelChip) collabModelChip.addEventListener('click', (e) => {
   e.preventDefault(); e.stopPropagation();
+  if (collabModelMenu && !collabModelMenu.hidden) { closeAllModelMenus(); return; }
   openModelMenu(collabModelChip, collabModelMenu);
 });
 document.addEventListener('click', (e) => {
@@ -3547,11 +4016,19 @@ async function loadBridgeConfig() {
       const p = state.modelProfiles.find(x => (x.id ?? 0) === cfg.llmNo);
       if (p) {
         state.llmNo = cfg.llmNo;
-        state.modelName = profileLabel(p.name) || p.name || null;
-        updateModelChip();
+        state.modelName = modelDisplayName(p);
         renderSettingsModels();
       }
     }
+    const cno = cfg.conductor?.llmNo ?? cfg.llmNo;
+    if (cno != null && state.modelProfiles.length) {
+      const cp = state.modelProfiles.find(x => (x.id ?? 0) === cno);
+      if (cp) {
+        state.conductorLlmNo = cno;
+        state.conductorModelName = modelDisplayName(cp);
+      }
+    }
+    updateModelChip();
     syncBootCache();
   } catch (_) {}
 }
@@ -3637,7 +4114,7 @@ function renderThumbStrip(ctx = activeFileComposer) {
     const sub = fileSubLabel(name).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
     const path = (f.path || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
     const dataName = name.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-    return `<div class="file-chip pending" data-sid="${f.sid}" data-path="${path}" data-name="${dataName}"><span class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="fc-meta"><span class="fc-name">${label}</span><span class="fc-sub">${sub}</span></span><button class="x" data-sid="${f.sid}" data-i18n-title="upload.removeTitle" title="">×</button></div>`;
+    return `<div class="file-chip pending" data-sid="${f.sid}" data-path="${path}" data-name="${dataName}"><span class="fc-icon">${GA_ICON('fileText')}</span><span class="fc-meta"><span class="fc-name">${label}</span><span class="fc-sub">${sub}</span></span><button class="x" data-sid="${f.sid}" data-i18n-title="upload.removeTitle" title="">×</button></div>`;
   }).join('');
   cfg.strip.hidden = false;
   applyI18n();
@@ -4010,8 +4487,9 @@ window.ga.onBridgeClosed(() => {
   chatStatus.setDisconnected();
 });
 
-/* ═══════════════ Token 统计页 ═══════════════ */
+/* ═══════════════ Token 用量页 ═══════════════ */
 const tokTbody = document.getElementById('tok-tbody');
+const tokTable = document.getElementById('tok-table');
 const tokPager = document.getElementById('tok-pager');
 const tokSince = document.getElementById('tok-since');
 const tokUntil = document.getElementById('tok-until');
@@ -4054,10 +4532,10 @@ function modelPriceTip(model) {
   const cacheWriteRate = isClaudeOrDS ? 1.25 : 1.0;
   const lines = [];
   if (!known) lines.push(t('tok.pricingUnknown'));
-  lines.push(t('tok.priceInput') + p[0] + ' /M tokens');
-  lines.push(t('tok.priceOutput') + p[1] + ' /M tokens');
-  lines.push(t('tok.priceCacheW') + (p[0] * cacheWriteRate).toFixed(2) + ' /M tokens');
-  lines.push(t('tok.priceCacheR') + (p[0] * cacheReadRate).toFixed(2) + ' /M tokens');
+  lines.push(t('tok.priceInput') + p[0] + ' /M');
+  lines.push(t('tok.priceOutput') + p[1] + ' /M');
+  lines.push(t('tok.priceCacheW') + (p[0] * cacheWriteRate).toFixed(2) + ' /M');
+  lines.push(t('tok.priceCacheR') + (p[0] * cacheReadRate).toFixed(2) + ' /M');
   return lines.join('\n');
 }
 
@@ -4160,10 +4638,46 @@ function tokRenderTable(records) {
     }
     tr.addEventListener('click',()=>{const o=tr.classList.toggle('open');details.forEach(d=>d.hidden=!o);});
   }
-  if(tokPager){tokPager.innerHTML='';if(totalPages>1)for(let i=0;i<totalPages;i++){const b=document.createElement('button');b.textContent=i+1;if(i===_tokPage)b.className='active';b.addEventListener('click',()=>{_tokPage=i;tokRenderTable(records);});tokPager.appendChild(b);}}
+  if(tokPager){renderTokPager(tokPager, totalPages, _tokPage, p => { _tokPage = p; tokRenderTable(records); });}
 }
 
-async function loadTokenPage(){await tokPollBridge();const f=tokGetFiltered();const all=tokLoadHistory();tokRenderStats(f,all);tokRenderTable(f);if(tokChartEl&&!tokChartEl.hidden)renderTokChart();}
+/* 分页按钮:首页/末页 + 当前页前后各 2 + 省略号,最多渲染 ~9 个 DOM,
+   1000 页和 10 页都长一样,不会一行排开拖死浏览器。 */
+function renderTokPager(host, totalPages, currentPage, onJump) {
+  host.innerHTML = '';
+  if (totalPages <= 1) return;
+  const makeBtn = (label, page, opts = {}) => {
+    const b = document.createElement('button');
+    if (opts.svg) b.innerHTML = label;
+    else b.textContent = label;
+    if (opts.active) b.classList.add('active');
+    if (opts.arrow) b.classList.add('tok-pager-arrow');
+    if (opts.disabled) b.disabled = true;
+    if (!opts.disabled) b.addEventListener('click', () => onJump(page));
+    return b;
+  };
+  const makeEllipsis = () => {
+    const s = document.createElement('span');
+    s.className = 'tok-pager-gap';
+    s.textContent = '…';
+    return s;
+  };
+  // 收集页码:1 / 当前-2..当前+2 / 末页,去重并填省略号
+  const pages = new Set([0, totalPages - 1]);
+  for (let i = Math.max(0, currentPage - 2); i <= Math.min(totalPages - 1, currentPage + 2); i++) pages.add(i);
+  const sorted = [...pages].sort((a, b) => a - b);
+  // 首尾箭头用 phosphor 图标(跟侧栏 .chev 同款),不再用 Unicode 字符
+  host.appendChild(makeBtn(GA_ICON('caretLeft'), currentPage - 1, { svg: true, arrow: true, disabled: currentPage === 0 }));
+  let prev = -1;
+  for (const p of sorted) {
+    if (prev >= 0 && p - prev > 1) host.appendChild(makeEllipsis());
+    host.appendChild(makeBtn(String(p + 1), p, { active: p === currentPage }));
+    prev = p;
+  }
+  host.appendChild(makeBtn(GA_ICON('caretRight'), currentPage + 1, { svg: true, arrow: true, disabled: currentPage === totalPages - 1 }));
+}
+
+async function loadTokenPage(){await tokPollBridge();const f=tokGetFiltered();const all=tokLoadHistory();tokRenderStats(f,all);tokRenderTable(f);}
 
 const _COND_HIST_KEY = 'conductor_token_hist';
 const _COND_LAST_KEY = 'conductor_token_last';
@@ -4184,7 +4698,6 @@ let _tokTab = 'chat';
 const tokTabs = document.getElementById('tok-tabs');
 const tokFilter = document.querySelector('.tok-filter');
 const tokStatRow = document.querySelector('.page[data-page="token"] .stat-row');
-const tokChartWrap = document.getElementById('tok-chart-wrap');
 if (tokTabs) tokTabs.addEventListener('click', e => {
   const btn = e.target.closest('.tok-tab');
   if (!btn || btn.classList.contains('active')) return;
@@ -4192,8 +4705,8 @@ if (tokTabs) tokTabs.addEventListener('click', e => {
   btn.classList.add('active');
   _tokTab = btn.dataset.tab;
   _tokPage = 0;
-  if (_tokTab === 'conductor') { if (tokFilter) tokFilter.style.display = 'none'; if (tokStatRow) tokStatRow.style.display = 'none'; if (tokChartWrap) tokChartWrap.style.display = 'none'; loadConductorTokens(); }
-  else { if (tokFilter) tokFilter.style.display = ''; if (tokStatRow) tokStatRow.style.display = ''; if (tokChartWrap) tokChartWrap.style.display = ''; loadTokenPage(); }
+  if (_tokTab === 'conductor') { if (tokFilter) tokFilter.style.display = 'none'; if (tokStatRow) tokStatRow.style.display = 'none'; if (tokTable) tokTable.classList.add('tok-table--conductor'); loadConductorTokens(); }
+  else { if (tokFilter) tokFilter.style.display = ''; if (tokStatRow) tokStatRow.style.display = ''; if (tokTable) tokTable.classList.remove('tok-table--conductor'); loadTokenPage(); }
 });
 
 async function loadConductorTokens() {
@@ -4220,7 +4733,7 @@ async function loadConductorTokens() {
   const hIn = hist.input + curIn, hOut = hist.output + curOut, hCc = hist.cacheCreate + curCc, hCr = hist.cacheRead + curCr, hCost = hist.cost + curCost;
   if (!tokTbody) return;
   const tip = t('tok.condTip');
-  const _ci = `<svg width="14" height="14" ${CONDUCTOR_SVG_ATTRS} style="vertical-align:-2px;margin-right:4px">${CONDUCTOR_SVG_INNER}</svg>`;
+  const _ci = GA_ICON('gitFork', 'tok-cond-ico');
   const hCacheBase = hIn + hCr + hCc;
   const hCacheRate = hCacheBase > 0 ? (hCr / hCacheBase * 100).toFixed(1) + '%' : '0%';
   const curCacheBase = curIn + curCr + curCc;
@@ -4238,84 +4751,32 @@ const tokResetBtn=document.getElementById('tok-reset');
 if(tokResetBtn)tokResetBtn.addEventListener('click',()=>{if(fpSince)fpSince.clear();if(fpUntil)fpUntil.clear();_tokPage=0;loadTokenPage();});
 
 /* ─── Token trend chart ─── */
-const tokChartToggle = document.getElementById('tok-chart-toggle');
-const tokChartEl = document.getElementById('tok-chart');
-if (tokChartToggle && tokChartEl) {
-  tokChartToggle.addEventListener('click', () => {
-    const open = tokChartEl.hidden;
-    tokChartEl.hidden = !open;
-    tokChartToggle.classList.toggle('open', open);
-    if (open) renderTokChart();
-  });
-}
-function renderTokChart() {
-  const history = tokGetFiltered();
-  if (!history.length || !tokChartEl) return;
-  const daily = {};
-  for (const r of history) {
-    const day = new Date(r.ts * 1000).toLocaleDateString('sv');
-    daily[day] = (daily[day] || 0) + (r.input || 0) + (r.output || 0) + (r.cacheRead || 0) + (r.cacheCreate || 0);
-  }
-  const rawDays = Object.keys(daily).sort();
-  if (!rawDays.length) { tokChartEl.innerHTML = ''; return; }
-  // Fill gaps: include days with 0 between first and last
-  const days = [];
-  const d0 = new Date(rawDays[0]), d1 = new Date(rawDays[rawDays.length - 1]);
-  for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) {
-    days.push(d.toLocaleDateString('sv'));
-  }
-  const vals = days.map(d => daily[d] || 0);
-  const maxVal = Math.max(...vals, 1);
-  const W = 600, H = 260, PL = 48, PR = 30, PT = 14, PB = 28;
-  const cw = W - PL - PR, ch = H - PT - PB;
-  const step = days.length > 1 ? cw / (days.length - 1) : cw;
-  const pts = vals.map((v, i) => [PL + i * step, PT + ch - (v / maxVal) * ch]);
-  const polyline = pts.map(p => p.join(',')).join(' ');
-  const yLines = [0, 0.25, 0.5, 0.75, 1].map(f => {
-    const y = PT + ch - f * ch;
-    const label = fmtTok(maxVal * f);
-    return `<line x1="${PL}" x2="${W-PR}" y1="${y}" y2="${y}" stroke="var(--line-soft)" stroke-width="0.5"/><text x="${PL-4}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${label}</text>`;
-  }).join('');
-  const xLabels = days.map((d, i) => {
-    if (days.length > 14 && i % Math.ceil(days.length / 7) !== 0 && i !== days.length - 1) return '';
-    return `<text x="${pts[i][0]}" y="${H-4}" text-anchor="middle" font-size="9" fill="var(--muted)">${d.slice(5)}</text>`;
-  }).join('');
-  const dots = pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="var(--blue)"><title>${days[i]}: ${fmtTok(vals[i])}</title></circle>`).join('');
-  // 保持 viewBox 自然比例,文字不被非等比缩放压扁。配合容器 aspect-ratio:600/260,
-  // 视觉上铺满又不变形。
-  tokChartEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${yLines}${xLabels}<polyline points="${polyline}" fill="none" stroke="var(--blue)" stroke-width="1.5"/>${dots}</svg>`;
-}
-
 nav.addEventListener('click',(e)=>{const item=e.target.closest('.nav-item');if(item&&item.dataset.page==='token'){if(_tokTab==='conductor')loadConductorTokens();else loadTokenPage();}if(item&&item.dataset.page==='services')refreshServicesPanel();});
 /* ═══════════════ 自定义预设 ═══════════════ */
 const CP_KEY = 'ga_custom_presets';
 const HB_KEY = 'ga_hidden_builtins';
 
-const CONDUCTOR_SVG_INNER = '<path d="M0,0 L18,1 L38,5 L51,10 L66,18 L78,29 L82,37 L83,40 L83,57 L62,204 L59,220 L52,221 L23,220 L-20,220 L-53,221 L-55,219 L-71,108 L-78,57 L-78,41 L-75,33 L-69,25 L-59,17 L-44,9 L-29,4 L-13,1 Z" transform="translate(551,74)"/><path d="M0,0 L18,1 L30,4 L34,7 L36,31 L55,164 L57,179 L57,186 L56,187 L20,191 L-9,196 L-37,203 L-51,208 L-56,208 L-59,200 L-67,176 L-83,141 L-91,121 L-95,105 L-96,98 L-96,81 L-93,66 L-87,51 L-80,40 L-69,28 L-60,20 L-45,11 L-30,5 L-11,1 Z" transform="translate(426,109)"/><path d="M0,0 L9,0 L26,2 L41,6 L57,13 L71,22 L82,32 L91,44 L99,60 L103,74 L104,81 L104,98 L101,115 L93,137 L78,169 L70,190 L65,207 L64,208 L56,207 L38,201 L18,196 L-12,191 L-48,187 L-50,186 L-47,162 L-28,29 L-26,7 L-20,3 L-10,1 Z" transform="translate(673,109)"/><path d="M0,0 L35,0 L79,2 L117,6 L153,12 L180,19 L196,25 L201,30 L202,32 L203,42 L203,78 L201,86 L199,90 L219,97 L236,106 L252,118 L262,127 L273,136 L282,144 L299,155 L317,163 L335,168 L371,175 L380,178 L381,182 L371,203 L364,223 L359,243 L358,250 L356,252 L346,252 L326,249 L311,245 L296,239 L280,230 L267,219 L258,208 L249,194 L240,175 L232,156 L221,137 L209,124 L199,116 L193,113 L193,123 L201,130 L206,138 L209,150 L209,167 L206,185 L201,200 L195,211 L185,221 L177,225 L170,251 L163,271 L155,289 L145,308 L137,320 L125,336 L111,351 L100,361 L96,364 L95,391 L92,420 L87,448 L79,481 L68,516 L54,552 L38,587 L21,622 L16,624 L12,619 L0,595 L-15,562 L-27,534 L-40,498 L-50,462 L-56,433 L-60,404 L-61,391 L-62,364 L-77,351 L-85,343 L-94,332 L-103,320 L-114,302 L-123,285 L-134,257 L-141,232 L-142,224 L-147,223 L-156,216 L-162,208 L-168,196 L-173,177 L-174,171 L-174,147 L-170,135 L-163,126 L-159,123 L-159,111 L-160,93 L-165,89 L-168,82 L-168,34 L-165,28 L-157,23 L-135,16 L-108,10 L-83,6 L-43,2 Z M-1,70 L-38,72 L-64,75 L-91,80 L-110,85 L-116,88 L-119,95 L-124,121 L-126,144 L-126,172 L-123,202 L-117,231 L-109,257 L-100,278 L-89,299 L-77,316 L-66,328 L-65,330 L-63,330 L-62,333 L-57,336 L-50,315 L-42,300 L-35,291 L-26,282 L-12,274 L1,270 L7,269 L27,269 L43,273 L59,281 L70,291 L80,306 L88,326 L91,336 L98,331 L105,323 L114,312 L124,297 L136,274 L145,250 L152,226 L157,200 L159,184 L160,170 L160,144 L158,121 L153,95 L150,88 L141,84 L115,78 L90,74 L58,71 L35,70 Z" transform="translate(536,309)"/><path d="M0,0 L7,0 L20,4 L30,12 L38,24 L46,20 L57,19 L67,22 L77,30 L83,39 L87,47 L90,58 L101,59 L107,63 L114,71 L120,84 L124,97 L127,119 L135,123 L141,135 L144,151 L145,173 L143,198 L138,223 L133,240 L125,259 L116,275 L108,286 L97,299 L86,309 L76,316 L64,323 L55,327 L60,369 L60,372 L68,372 L78,375 L86,382 L90,391 L90,402 L86,410 L80,415 L76,416 L22,419 L19,421 L18,426 L20,430 L27,431 L65,429 L83,429 L90,433 L94,439 L95,442 L95,453 L92,459 L87,464 L83,466 L57,468 L27,470 L24,473 L25,480 L27,481 L46,481 L66,480 L86,480 L92,484 L96,492 L96,502 L92,510 L86,515 L82,517 L59,519 L52,519 L57,556 L60,563 L66,566 L74,565 L77,564 L79,559 L79,549 L78,540 L78,530 L89,527 L97,522 L104,514 L108,502 L108,491 L104,480 L99,473 L100,469 L104,463 L107,453 L107,442 L104,432 L100,426 L95,421 L97,416 L101,408 L102,404 L102,390 L99,380 L93,372 L89,368 L91,364 L104,352 L117,342 L133,331 L148,322 L170,310 L192,299 L226,284 L232,283 L234,287 L240,324 L246,353 L254,384 L266,420 L278,449 L291,477 L309,513 L322,543 L330,565 L335,584 L336,593 L334,595 L48,595 L38,592 L27,585 L17,576 L8,565 L-2,551 L-12,533 L-20,516 L-27,495 L-32,473 L-34,459 L-35,436 L-33,419 L-29,406 L-23,395 L-14,386 L-4,380 L7,376 L16,375 L13,356 L10,329 L1,328 L-20,321 L-36,313 L-48,306 L-64,294 L-82,276 L-92,263 L-103,245 L-112,226 L-118,209 L-123,190 L-126,171 L-126,149 L-123,137 L-119,131 L-114,128 L-111,128 L-112,121 L-112,107 L-109,88 L-104,76 L-98,68 L-92,63 L-87,61 L-79,61 L-78,50 L-73,37 L-66,28 L-57,22 L-51,20 L-41,20 L-30,24 L-25,15 L-18,7 L-9,2 Z" transform="translate(200,368)"/><path d="M0,0 L6,1 L42,17 L71,31 L100,46 L123,60 L140,72 L154,83 L167,95 L179,107 L190,121 L201,136 L210,151 L221,172 L230,195 L237,218 L243,247 L246,272 L247,289 L247,306 L245,310 L241,312 L-102,312 L-104,310 L-102,298 L-96,278 L-88,256 L-75,228 L-61,199 L-49,174 L-37,145 L-28,120 L-21,97 L-13,65 L-6,29 L-2,4 Z" transform="translate(674,651)"/>';
-const CONDUCTOR_SVG_ATTRS = 'viewBox="0 0 995 1037" fill="currentColor" stroke="none"';
-const CONDUCTOR_ICON_SVG = `<svg class="fc-ic" ${CONDUCTOR_SVG_ATTRS}>${CONDUCTOR_SVG_INNER}</svg>`;
-(() => {
-  const ic = document.querySelector('a.nav-item[data-page="collab"] > .ic');
-  if (ic) ic.innerHTML = `<svg ${CONDUCTOR_SVG_ATTRS} aria-hidden="true">${CONDUCTOR_SVG_INNER}</svg>`;
-})();
-
 const BUILTIN_PRESETS = [
   { key: 'butler', titleKey: 'preset.butler.t', descKey: 'preset.butler.d', navigate: 'collab',
-    iconSvg: CONDUCTOR_ICON_SVG },
+    get iconSvg() { return GA_ICON('gitFork', 'fc-ic'); } },
   { key: 'plan',   titleKey: 'preset.plan.t',   descKey: 'preset.plan.d',   promptKey: 'presetPrompt.plan',
-    iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/><circle cx="4" cy="6" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="4" cy="18" r="1.5"/></svg>' },
+    get iconSvg() { return GA_ICON('listChecks', 'fc-ic'); } },
   { key: 'goal',    titleKey: 'preset.goal.t',    descKey: 'preset.goal.d',    promptKey: 'presetPrompt.goal',
-    iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></svg>' },
-  { key: 'explore', titleKey: 'preset.explore.t', descKey: 'preset.explore.d', promptKey: 'presetPrompt.explore',
-    iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9 16.2 7.8"/></svg>' },
+    get iconSvg() { return GA_ICON('crosshair', 'fc-ic'); } },
+  { key: 'autonomous', titleKey: 'preset.autonomous.t', descKey: 'preset.autonomous.d', promptKey: 'presetPrompt.autonomous',
+    get iconSvg() { return GA_ICON('gridFour', 'fc-ic'); } },
   { key: 'hive',    titleKey: 'preset.hive.t',    descKey: 'preset.hive.d',    promptKey: 'presetPrompt.hive',
-    iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7"/><polygon points="12 8 16 10.3 16 14.7 12 17 8 14.7 8 10.3"/></svg>' },
+    get iconSvg() { return GA_ICON('hexagon', 'fc-ic'); } },
   { key: 'review',  titleKey: 'preset.review.t',  descKey: 'preset.review.d',  promptKey: 'presetPrompt.review',
-    iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' },
+    get iconSvg() { return GA_ICON('magnifyingGlass', 'fc-ic'); } },
+  { key: 'findwork', titleKey: 'preset.findwork.t', descKey: 'preset.findwork.d', promptKey: 'presetPrompt.findwork',
+    get iconSvg() { return GA_ICON('robot', 'fc-ic'); } },
   { key: 'mine',    titleKey: 'preset.mine.t',    descKey: 'preset.mine.d',    promptKey: 'presetPrompt.mine',
-    iconSvg: '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' },
+    get iconSvg() { return GA_ICON('star', 'fc-ic'); } },
 ];
 const ADD_ICON_SVG = GA_ICON('plus', 'fc-ic');
+// 自定义保存后生成的卡片图标（用户图标，表示"用户自定义的任务"）—— 与"添加"卡的 + 区分
+const CUSTOM_ICON_SVG = '<svg class="fc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 
 state.customPresets = [];
 state.hiddenBuiltins = new Set();
@@ -4341,11 +4802,22 @@ function saveHiddenBuiltins() {
   localStorage.setItem(HB_KEY, JSON.stringify([...state.hiddenBuiltins]));
 }
 
-function makeCardEl({ kind, dataAttrs, iconSvg, titleText, descText, removable }) {
+const EDIT_PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+function makeCardEl({ kind, dataAttrs, iconSvg, titleText, descText, removable, editable }) {
   const card = document.createElement('div');
   card.className = 'fcard ' + kind;
   for (const [k, v] of Object.entries(dataAttrs || {})) card.dataset[k] = v;
   card.innerHTML = iconSvg;
+  if (editable) {
+    const ed = document.createElement('button');
+    ed.className = 'fc-edit';
+    ed.type = 'button';
+    ed.dataset.editId = dataAttrs?.id || '';
+    ed.dataset.i18nTitle = 'customPreset.editTitle';
+    ed.title = t('customPreset.editTitle');
+    ed.innerHTML = EDIT_PENCIL_SVG;
+    card.appendChild(ed);
+  }
   if (removable) {
     const x = document.createElement('button');
     x.className = 'fc-x';
@@ -4360,10 +4832,12 @@ function makeCardEl({ kind, dataAttrs, iconSvg, titleText, descText, removable }
   const titleEl = document.createElement('div');
   titleEl.className = 'fc-t';
   titleEl.textContent = titleText;
+  titleEl.title = titleText;        // 截断后悬停看完整标题
   card.appendChild(titleEl);
   const descEl = document.createElement('div');
   descEl.className = 'fc-d';
   descEl.textContent = descText;
+  descEl.title = descText;          // 截断后悬停看完整描述
   card.appendChild(descEl);
   return card;
 }
@@ -4386,10 +4860,11 @@ function renderAllPresets() {
       grid.appendChild(makeCardEl({
         kind: 'fcard-custom',
         dataAttrs: { id: cp.id },
-        iconSvg: ADD_ICON_SVG,
+        iconSvg: CUSTOM_ICON_SVG,
         titleText: cp.title,
         descText: cp.prompt,
         removable: true,
+        editable: true,
       }));
     }
     const addCard = makeCardEl({
@@ -4408,6 +4883,14 @@ function renderAllPresets() {
 function addCustomPreset(title, prompt) {
   const id = 'cp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
   state.customPresets.push({ id, title, prompt });
+  saveCustomPresets();
+  renderAllPresets();
+}
+function updateCustomPreset(id, title, prompt) {
+  const cp = state.customPresets.find(p => p.id === id);
+  if (!cp) return;
+  cp.title = title;
+  cp.prompt = prompt;
   saveCustomPresets();
   renderAllPresets();
 }
@@ -4440,10 +4923,29 @@ const cpTitleInput = document.getElementById('cp-title');
 const cpPromptInput = document.getElementById('cp-prompt');
 const cpSaveBtn = document.getElementById('cp-save');
 const cpError = document.getElementById('cp-error');
+const cpModalTitle = cpModal?.querySelector('.modal-title');
+let cpEditId = null;   // null=新建模式; 否则为正在编辑的自定义预设 id
+function clearCpFieldHints() {
+  cpModal?.querySelectorAll('.field-limit-hint').forEach(h => { h.style.display = 'none'; });
+}
 function resetCustomPresetForm() {
+  cpEditId = null;
+  if (cpModalTitle) cpModalTitle.textContent = t('modal.customPreset');
   if (cpTitleInput) cpTitleInput.value = '';
   if (cpPromptInput) cpPromptInput.value = '';
   if (cpError) { cpError.hidden = true; cpError.textContent = ''; }
+  clearCpFieldHints();
+  setTimeout(() => { if (cpTitleInput) cpTitleInput.focus(); }, 0);
+}
+function openCustomPresetEditor(cp) {
+  closeModals();
+  openModal('custom-preset-modal');
+  cpEditId = cp.id;
+  if (cpModalTitle) cpModalTitle.textContent = t('modal.editCustomPreset');
+  if (cpTitleInput) cpTitleInput.value = cp.title;
+  if (cpPromptInput) cpPromptInput.value = cp.prompt;
+  if (cpError) { cpError.hidden = true; cpError.textContent = ''; }
+  clearCpFieldHints();
   setTimeout(() => { if (cpTitleInput) cpTitleInput.focus(); }, 0);
 }
 if (cpSaveBtn) cpSaveBtn.addEventListener('click', () => {
@@ -4453,7 +4955,9 @@ if (cpSaveBtn) cpSaveBtn.addEventListener('click', () => {
     if (cpError) { cpError.textContent = t('customPreset.empty'); cpError.hidden = false; }
     return;
   }
-  addCustomPreset(title, prompt);
+  if (cpEditId) updateCustomPreset(cpEditId, title, prompt);
+  else addCustomPreset(title, prompt);
+  cpEditId = null;
   if (cpModal) cpModal.hidden = true;
 });
 
@@ -4641,19 +5145,20 @@ function showChanToast(title, detail, kind) {
 (function initInputLimits() {
   let _toastTimer = null;
 
-  function limitToast(maxLen) {
+  // msgKey 默认用会截断的文案；硬上限输入框传 'err.charLimitReached'（只提醒不提截断）
+  function limitToast(maxLen, msgKey = 'err.charLimit') {
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(() => {
-      const msg = t('err.charLimit').replace('{n}', maxLen);
+      const msg = t(msgKey).replace('{n}', maxLen);
       showChanToast(msg, '', 'err');
     }, 300);
   }
 
-  // Toast-based: for elements with maxLength attribute (input/textarea)
+  // Toast-based: for elements with maxLength attribute (input/textarea) —— 硬上限,不会截断
   function bindToastLimit(el) {
     if (!el || !el.maxLength || el.maxLength < 0) return;
     el.addEventListener('input', () => {
-      if (el.value.length >= el.maxLength) limitToast(el.maxLength);
+      if (el.value.length >= el.maxLength) limitToast(el.maxLength, 'err.charLimitReached');
     });
   }
 
@@ -4704,22 +5209,36 @@ function showChanToast(title, detail, kind) {
     }
   }
 
-  // Per-field inline hint: creates a small red span right after the input
+  // Per-field inline hint: creates a small red span right after the input.
+  // 用 JS 管控长度(去掉原生 maxlength),以便"超限尝试"时可靠告警:
+  // 超出上限的字符先被键入,再由本逻辑截回上限并告警——每次超限都触发 input,
+  // 兼容打字/粘贴/中文 IME。到达上限本身合法、不告警。告警出现后自动消失,不常驻。
   function bindFieldInlineLimit(el) {
     if (!el || !el.maxLength || el.maxLength < 0) return;
+    const max = el.maxLength;
+    el.removeAttribute('maxlength');   // 转为 JS 管控
     const hint = document.createElement('span');
     hint.className = 'field-limit-hint';
     hint.style.cssText = 'color:var(--err,#dc2626);font-size:.75rem;display:none;margin-top:2px';
-    // Insert hint right after the input element
     el.insertAdjacentElement('afterend', hint);
-    el.addEventListener('input', () => {
-      if (el.value.length >= el.maxLength) {
-        hint.textContent = t('err.charLimit').replace('{n}', el.maxLength);
-        hint.style.display = 'block';
-      } else {
-        hint.style.display = 'none';
-      }
-    });
+    let hideTimer = null;
+    function warn() {
+      hint.textContent = t('err.charLimitReached').replace('{n}', max);
+      hint.style.display = 'block';
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => { hint.style.display = 'none'; }, 2500);
+    }
+    function enforce() {
+      if (el.value.length <= max) return;
+      const atEnd = el.selectionStart >= el.value.length;
+      el.value = el.value.slice(0, max);
+      if (atEnd) el.setSelectionRange(max, max);
+      warn();
+    }
+    let composing = false;
+    el.addEventListener('compositionstart', () => { composing = true; });
+    el.addEventListener('compositionend', () => { composing = false; enforce(); });
+    el.addEventListener('input', () => { if (!composing) enforce(); });
   }
 
   window.bindFieldInlineLimit = bindFieldInlineLimit;
@@ -4743,30 +5262,6 @@ function showChanToast(title, detail, kind) {
       const v = Number(el.value);
       if (el.value !== '' && v > max) el.value = max;
     });
-  }
-
-  // Shared inline error group (for preset form)
-  function createInlineGroup(errEl) {
-    const tracked = new Set();
-    function check(el) {
-      if (el.value.length >= el.maxLength) {
-        tracked.add(el);
-      } else {
-        tracked.delete(el);
-      }
-      if (tracked.size > 0) {
-        errEl.textContent = t('err.charLimit').replace('{n}', el.maxLength);
-        errEl.hidden = false;
-      } else {
-        errEl.hidden = true;
-      }
-    }
-    return {
-      addText(el) {
-        if (!el || !el.maxLength || el.maxLength < 0) return;
-        el.addEventListener('input', () => check(el));
-      }
-    };
   }
 
   // Wait for DOM ready
@@ -4793,13 +5288,23 @@ function showChanToast(title, detail, kind) {
       });
     }
 
-    // Preset form: shared inline error (user confirmed OK)
-    const cpErr = document.getElementById('cp-error');
-    if (cpErr) {
-      const group = createInlineGroup(cpErr);
-      group.addText(document.getElementById('cp-title'));
-      group.addText(document.getElementById('cp-prompt'));
-    }
+    // Preset form: 每字段独立内联提示（标题/Prompt 各自独立,互不串扰）
+    bindFieldInlineLimit(document.getElementById('cp-title'));
+    bindFieldInlineLimit(document.getElementById('cp-prompt'));
+
+    // First-run desktop-shortcut prompt (Windows portable bundle only). Driven from the web UI
+    // so the dialog always renders on top — a native dialog from the Rust startup thread had no
+    // parent window and got buried behind the main window on first launch.
+    maybeAskDesktopShortcut();
+  }
+
+  async function maybeAskDesktopShortcut() {
+    try {
+      const should = await window.ga.tauriInvoke('shortcut_should_ask');
+      if (!should) return;
+      const create = await showConfirmDialog({ title: t('common.confirm'), message: t('shortcut.askConfirm'), okText: t('common.confirm') });
+      await window.ga.tauriInvoke('shortcut_decide', { create });
+    } catch (_) { /* not in tauri / not a bundle — ignore */ }
   }
 
   if (document.readyState === 'loading') {
@@ -4949,11 +5454,51 @@ if (chanConfigSave) {
 
 /* ═══════════════ 状态面板（复用 ServiceManager + 启停/日志） ═══════════════ */
 const statusListEl = document.getElementById('status-list');
+const BRIDGE_SERVICE_ID = '__bridge__';
+const EXTRA_SERVICE_IDS = new Set(['frontends/conductor.py', 'reflect/scheduler.py']);
+
+function bridgeOfflinePanelServices() {
+  return [
+    {
+      id: BRIDGE_SERVICE_ID,
+      name: `bridge (:${BRIDGE_PORT})`,
+      status: 'offline',
+      running: false,
+      pid: null,
+      memMb: null,
+      cpuPct: null,
+      managed: false,
+    },
+    {
+      id: 'frontends/conductor.py',
+      name: 'frontends/conductor.py',
+      status: 'offline',
+      running: false,
+      pid: null,
+      memMb: null,
+      cpuPct: null,
+      managed: false,
+      bridgeOffline: true,
+    },
+    {
+      id: 'reflect/scheduler.py',
+      name: 'reflect/scheduler.py',
+      status: 'offline',
+      running: false,
+      pid: null,
+      memMb: null,
+      cpuPct: null,
+      managed: false,
+      bridgeOffline: true,
+    },
+  ];
+}
 
 function statusDisplayName(s) {
   if (!s) return '';
-  if (s.id === '__bridge__') return s.name || 'bridge';
+  if (s.id === BRIDGE_SERVICE_ID) return s.name || 'bridge';
   if (s.id === 'reflect/scheduler.py') return t('proc.scheduler');
+  if (s.id === 'frontends/conductor.py') return t('proc.conductor');
   return channelDisplayName(s);
 }
 function fmtPid(pid) { return pid ? `PID ${pid}` : '—'; }
@@ -4973,10 +5518,26 @@ function renderStatusPanel(services) {
     const stClass = channelStatusClass(s.status || 'offline');
     const running = !!s.running;
     const managed = s.managed !== false;
-    let acts = `<button type="button" class="link-btn link sm" data-act="logs"></button>`;
-    if (managed) {
-      if (running) acts += `<button type="button" class="link-btn link sm" data-act="restart"></button>`;
-      acts += `<button type="button" class="sw-mini${running ? ' on' : ''}" data-act="toggle" aria-pressed="${running}"><i></i></button>`;
+    const isBridge = s.id === BRIDGE_SERVICE_ID;
+    const isExtra = EXTRA_SERVICE_IDS.has(s.id);
+    let acts = '';
+    if (isBridge) {
+      if (running) {
+        acts += `<button type="button" class="link-btn link sm" data-act="logs"></button>`;
+        acts += `<button type="button" class="link-btn link sm" data-act="bridge-exit"></button>`;
+      } else {
+        acts += `<button type="button" class="link-btn link sm" data-act="bridge-start"></button>`;
+      }
+    } else if (!s.bridgeOffline) {
+      acts += `<button type="button" class="link-btn link sm" data-act="logs"></button>`;
+      if (managed) {
+        if (running) acts += `<button type="button" class="link-btn link sm" data-act="restart"></button>`;
+        if (isExtra) {
+          acts += `<button type="button" class="link-btn link sm${running ? ' on' : ''}" data-act="toggle" aria-pressed="${running}"></button>`;
+        } else {
+          acts += `<button type="button" class="sw-mini${running ? ' on' : ''}" data-act="toggle" aria-pressed="${running}"><i></i></button>`;
+        }
+      }
     }
     row.innerHTML = `
       <b class="st-name"></b>
@@ -4993,14 +5554,30 @@ function renderStatusPanel(services) {
     if (logBtn) logBtn.textContent = t('act.logs');
     const rstBtn = row.querySelector('[data-act="restart"]');
     if (rstBtn) rstBtn.textContent = t('act.restart');
+    const startBridgeBtn = row.querySelector('[data-act="bridge-start"]');
+    if (startBridgeBtn) startBridgeBtn.textContent = t('act.start');
+    const exitBridgeBtn = row.querySelector('[data-act="bridge-exit"]');
+    if (exitBridgeBtn) exitBridgeBtn.textContent = t('act.exit');
+    const textToggleBtn = row.querySelector('.link-btn[data-act="toggle"]');
+    if (textToggleBtn) textToggleBtn.textContent = running ? t('act.exit') : t('act.start');
     statusListEl.appendChild(row);
   }
 }
 
 async function loadStatusPanel() {
   if (!statusListEl) return;
-  const res = await window.ga.getServicePanel();
-  renderStatusPanel(res.services || []);
+  if (bridgeUiOffline) {
+    renderStatusPanel(bridgeOfflinePanelServices());
+    return;
+  }
+  try {
+    const res = await window.ga.getServicePanel();
+    renderStatusPanel(res.services || []);
+  } catch (_) {
+    window.ga.setBridgeUiOffline(true);
+    gaServiceStore.applySnapshot(bridgeOfflinePanelServices());
+    renderStatusPanel(bridgeOfflinePanelServices());
+  }
 }
 
 async function restartService(id) {
@@ -5023,6 +5600,40 @@ if (statusListEl) {
     const act = actEl.dataset.act;
     if (act === 'logs') {
       openChannelLogs(id);
+      return;
+    }
+    if (act === 'bridge-start') {
+      if (_chanBusy) return;
+      _chanBusy = true;
+      actEl.disabled = true;
+      try {
+        await window.ga.spawnBridge();
+        await loadStatusPanel();
+        showChanToast(t('sys.channelStarted') + ' · bridge', '', 'ok');
+      } catch (err) {
+        showChanToast(t('err.channelStart') + ' · bridge', err.message || String(err), 'err');
+      } finally {
+        _chanBusy = false;
+        actEl.disabled = false;
+      }
+      return;
+    }
+    if (act === 'bridge-exit') {
+      if (_chanBusy) return;
+      _chanBusy = true;
+      actEl.disabled = true;
+      try {
+        window.ga.setBridgeUiOffline(true);
+        gaServiceStore.applySnapshot(bridgeOfflinePanelServices());
+        renderStatusPanel(bridgeOfflinePanelServices());
+        await window.ga.exitBridge();
+        showChanToast(t('sys.channelStopped') + ' · bridge', '', 'ok');
+      } catch (err) {
+        showChanToast(t('err.channelStop') + ' · bridge', err.message || String(err), 'err');
+      } finally {
+        _chanBusy = false;
+        actEl.disabled = false;
+      }
       return;
     }
     if (act === 'restart') {
@@ -5049,7 +5660,10 @@ if (statusListEl) {
 
 gaServiceStore.onServices((list) => {
   if (isSvcTab('channels')) renderChannelList(list);
-  if (isSvcTab('status')) loadStatusPanel();
+  if (isSvcTab('status')) {
+    if (bridgeUiOffline) renderStatusPanel(bridgeOfflinePanelServices());
+    else loadStatusPanel();
+  }
 });
 if (chanListEl) {
   chanListEl.addEventListener('click', async (e) => {
@@ -5385,20 +5999,15 @@ function bindComposerInRoot(root, opts) {
     if (S.conductorTyping && S.serviceAvailable) collabStatus.setBusy(t('status.running'));
     else if (S.serviceAvailable) collabStatus.setReady();
     else if (S.reconnecting || (!S.everConnected && S.failCount < FAIL_MAX)) collabStatus.setConnecting();
-    else collabStatus.setDisconnected();
+    else collabStatus.set(t('collab.offlineShort'), 'offline');  // 顶栏直接显示"无法连接 Conductor(8900)"取代"未连接"
   }
 
   function setConnUi() {
-    const off = $('collab-offline'), recon = $('collab-reconnect');
+    const retry = $('collab-retry');
     const avail = S.serviceAvailable;
     const trying = !avail && !S.everConnected && S.failCount < FAIL_MAX;
-    if (off) off.hidden = avail || S.reconnecting || trying;
-    if (recon) {
-      recon.hidden = !S.reconnecting;
-      recon.textContent = S.reconnecting && S.reconnectAt > Date.now()
-        ? t('collab.reconnect') + ' ' + t('collab.reconnectIn').replace('{n}', Math.ceil((S.reconnectAt - Date.now()) / 1000))
-        : t('collab.reconnect');
-    }
+    // 只有"真离线且不在自动重连"才显示刷新图标(右边的手动重试入口)
+    if (retry) retry.hidden = avail || S.reconnecting || trying;
     window.collabComposer?.setEnabled?.(avail);
     syncCollabStatus();
     syncDraft();
@@ -5653,4 +6262,25 @@ function bindComposerInRoot(root, opts) {
   };
   window.collabFocus = () => window.collabComposer?.focus?.();
   window.collabRetranslate = () => { renderWorkers(); syncMessages(); setConnUi(); };
+})();
+
+/* ═══════════════ Composer layout: inline / stacked ═══════════════ */
+(function initComposerLayout() {
+  const BREAKPOINT = 480;
+  const SINGLE_LINE = 36;
+
+  document.querySelectorAll('.composer-inset').forEach(inset => {
+    const input = inset.querySelector('.input');
+    if (!input) return;
+
+    function update() {
+      const wide = inset.offsetWidth >= BREAKPOINT;
+      const single = input.scrollHeight <= SINGLE_LINE;
+      inset.classList.toggle('is-inline', wide && single);
+    }
+
+    new ResizeObserver(update).observe(inset);
+    input.addEventListener('input', update);
+    update();
+  });
 })();

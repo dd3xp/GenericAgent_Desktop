@@ -25,6 +25,9 @@ HTTP API:
   GET    /services/panel
   GET    /services/mykey
   POST   /services/mykey       body: {"content":"..."}
+  POST   /services/stop-extras   stop conductor + scheduler (127.0.0.1 only)
+  POST   /services/start-extras  start conductor + scheduler (127.0.0.1 only)
+  POST   /services/bridge/exit    stop managed services, then exit bridge (127.0.0.1 only)
 
 WS API (state sync):
   GET /ws -> on connect sends services.snapshot; service.changed on updates
@@ -33,8 +36,8 @@ WS API (state sync):
 """
 from __future__ import annotations
 
-import asyncio, contextlib, importlib, json, os, re, subprocess, sys
-from collections import deque
+import asyncio, atexit, contextlib, importlib, json, os, re, subprocess, sys
+from collections import Counter, deque
 import threading, time, traceback, uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -96,6 +99,9 @@ class Session:
     plan_scan_baseline: int = 0
     plan_path: str = ""
     llm_history: Optional[List[dict]] = None
+    # 该会话绑定的模型下标(mykey.py 配置块顺序,== agent.llmclients 下标)。
+    # None = 未绑定,发消息时回退到全局默认 ui.llmNo,保持旧会话平滑迁移。
+    llm_no: Optional[int] = None
 
 
 def _load_plan_baseline(item: dict, msgs: list) -> int:
@@ -149,6 +155,7 @@ class AgentManager:
                                 "pinned": s.pinned, "untitled": s.untitled,
                                 "plan_scan_baseline": s.plan_scan_baseline,
                                 "plan_path": s.plan_path or "",
+                                "llm_no": s.llm_no,
                                 "llm_history": llm_hist})
             self._sessions_file.write_text(json.dumps(arr, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as e:
@@ -173,7 +180,8 @@ class AgentManager:
                                plan_path=_sanitize_desktop_plan_path(
                                    item["id"], item.get("plan_path") or ""),
                                status="idle", agent=None,
-                               llm_history=item.get("llm_history"))
+                               llm_history=item.get("llm_history"),
+                               llm_no=item.get("llm_no"))
                 self.sessions[sess.id] = sess
             if self.sessions:
                 self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
@@ -268,14 +276,27 @@ class AgentManager:
         apikey = str(data.get("apikey") or "").strip() or str((existing or {}).get("apikey") or "").strip()
         if require_key and not apikey:
             raise ValueError("apikey is required")
-        cfg: Dict[str, Any] = {"apikey": apikey, "apibase": apibase, "model": model}
-        if name := str(data.get("name") or "").strip():
-            cfg["name"] = name
+        # 从 existing 起步：保留表单未覆盖的高级字段（proxy / temperature / api_mode /
+        # reasoning_effort / fake_cc_system_prompt / thinking_type …），避免 GUI 编辑时丢失
+        cfg: Dict[str, Any] = dict(existing or {})
+        cfg.update({"apikey": apikey, "apibase": apibase, "model": model})
+        if "name" in data:
+            name = str(data.get("name") or "").strip()
+            if name:
+                cfg["name"] = name
+            else:
+                cfg.pop("name", None)
         for k in ("max_retries", "connect_timeout", "read_timeout"):
             if data.get(k) is not None and str(data.get(k)).strip() != "":
                 cfg[k] = int(data[k])
-            elif existing and k in existing:
-                cfg[k] = existing[k]
+        # 流式开关：默认 True 不写（保持 mykey 干净），仅显式非流式才落 'stream': False
+        if "stream" in data:
+            s = data["stream"]
+            stream = s if isinstance(s, bool) else str(s).strip().lower() not in ("false", "0", "no", "off")
+            if stream:
+                cfg.pop("stream", None)
+            else:
+                cfg["stream"] = False
         return cfg
 
     def _save_mykey_text(self, text: str) -> list:
@@ -319,7 +340,9 @@ class AgentManager:
     def get_model_profile(self, profile_id: int) -> dict:
         var, cfg = self._profile_at(profile_id)
         ks = ("model", "apibase", "apikey", "name", "max_retries", "connect_timeout", "read_timeout")
-        return {"id": profile_id, "varName": var, **{k: cfg.get(k, d) for k, d in zip(ks, ("", "", "", "", 5, 15, 300))}}
+        out = {"id": profile_id, "varName": var, **{k: cfg.get(k, d) for k, d in zip(ks, ("", "", "", "", 5, 15, 300))}}
+        out["stream"] = cfg.get("stream", True)
+        return out
 
     def update_model_profile(self, profile_id: int, data: dict) -> dict:
         var, existing = self._profile_at(profile_id)
@@ -330,8 +353,17 @@ class AgentManager:
     def delete_model_profile(self, profile_id: int) -> dict:
         if len(self._profile_keys()) <= 1:
             raise ValueError("cannot delete the last profile")
-        var, _ = self._profile_at(profile_id)
-        profiles = self._save_mykey_text(self._patch_var_block(self._mykey_file().read_text(encoding="utf-8"), var).rstrip() + "\n")
+        var, cfg = self._profile_at(profile_id)
+        text = self._patch_var_block(self._mykey_file().read_text(encoding="utf-8"), var).rstrip() + "\n"
+        # 顺手把它从聚合渠道里摘掉，避免 llm_nos 残留指向已删除的模型（会让 Mixin 构建失败）
+        name = str(cfg.get("name") or cfg.get("model") or "").strip()
+        keys, mk = self._mykey_vars()
+        mvar, mcfg = self._mixin_entry(keys, mk)
+        if mcfg and mvar is not None and name in [str(m) for m in (mcfg.get("llm_nos") or [])]:
+            mcfg = {**mcfg, "llm_nos": [str(m) for m in (mcfg.get("llm_nos") or []) if str(m) != name]}
+            if self._find_var_block_span(text, mvar):
+                text = self._patch_var_block(text, mvar, mcfg)
+        profiles = self._save_mykey_text(text)
         return {"profileId": profile_id, "profiles": profiles}
 
     def ensure_ga_import_path(self) -> Path:
@@ -358,16 +390,140 @@ class AgentManager:
             with contextlib.suppress(Exception):
                 os.chdir(old_cwd)
 
-    def list_model_profiles(self):
+    @staticmethod
+    def _base_display_name(var: str, cfg: Optional[dict]) -> str:
+        c = cfg or {}
+        return str(c.get("name") or c.get("model") or var)
+
+    def _mykey_vars(self):
+        """(keys, mk)：mykey 里的模型变量名（按定义顺序，与 agentmain.llmclients 索引
+        一一对齐）和原始 dict。过滤规则与 _profile_keys / load_llm_sessions 完全一致，
+        因此 id == llmclients 下标，前端选中 llmNo 能正确激活对应 client。"""
+        self._mykey_file()   # 确保 mykey.py 存在（首次从模板生成空配置），否则全新安装时
+                             # reload_mykeys 找不到 mykey 会返回空，空聚合渠道就不显示了
         self.ensure_ga_import_path()
+        from llmcore import reload_mykeys
+        mk = reload_mykeys()[0]
+        keys = [k for k in mk if any(x in k for x in ("api", "config", "cookie"))]
+        return keys, mk
+
+    def _mixin_entry(self, keys, mk):
+        """返回 (mixin_var, mixin_cfg_dict) 或 (None, None)。单一主聚合渠道，只取第一个。"""
+        for k in keys:
+            if "mixin" in k and isinstance(mk.get(k), dict):
+                return k, dict(mk[k])
+        return None, None
+
+    def list_model_profiles(self):
+        """直接读 mykey.py 结构（不依赖能否成功构建出 client），这样空聚合渠道、
+        未填 key 的模型也能如实展示。聚合渠道(kind=mixin)带 members；基本模型
+        (kind=native)带 inMixin/group。"""
         try:
-            agentmain = importlib.import_module("agentmain")
-            agent = agentmain.GenericAgent()
-            if hasattr(agent, "list_llms"):
-                return [{"id": i, "name": name, "active": active} for i, name, active in agent.list_llms()]
+            keys, mk = self._mykey_vars()
         except Exception as e:
             print(f"get model profiles failed: {e}", file=sys.stderr)
-        return []
+            return []
+        # A profile can be referenced by any mixin channel, not only the first one.
+        # Keep each mixin row's own members for display, but mark native profiles as
+        # inMixin when they appear in any mixin.
+        all_mixin_members: set[str] = set()
+        for k in keys:
+            cfg = mk.get(k) if isinstance(mk.get(k), dict) else {}
+            if "mixin" in k:
+                all_mixin_members.update(str(m) for m in (cfg.get("llm_nos") or []))
+        active = self.config.get("llmNo", 0)
+        out = []
+        for i, k in enumerate(keys):
+            cfg = mk.get(k) if isinstance(mk.get(k), dict) else {}
+            if "mixin" in k:
+                members = [str(m) for m in (cfg.get("llm_nos") or [])]
+                out.append({"id": i, "varName": k, "kind": "mixin", "name": "",
+                            "members": members, "active": i == active})
+            else:
+                name = self._base_display_name(k, cfg)
+                out.append({"id": i, "varName": k, "kind": "native", "name": name,
+                            "model": cfg.get("model", ""),
+                            "group": "native" if "native" in k else "std",
+                            "inMixin": name in all_mixin_members, "active": i == active})
+        return out
+
+    def add_to_mixin(self, profile_id: int) -> dict:
+        """把一个基本模型加入主聚合渠道：把它的 name 追加进 mixin_config['llm_nos']。
+        坑1：校验 Native 一致性（聚合内必须全 Native 或全非 Native）。
+        坑2：加入前若该模型没有显式 name，先把 name 写进它的配置块（保证引用稳定）。"""
+        var, cfg = self._profile_at(profile_id)   # 对 mixin 会抛错（只接受 native）
+        name = str(cfg.get("name") or cfg.get("model") or "").strip()
+        if not name:
+            raise ValueError("this model needs a name or model before joining the channel")
+        keys, mk = self._mykey_vars()
+        mvar, mcfg = self._mixin_entry(keys, mk)
+        new_is_native = "native" in var
+        name2var = {self._base_display_name(k, mk.get(k) if isinstance(mk.get(k), dict) else {}): k
+                    for k in keys if "mixin" not in k}
+        existing = [str(m) for m in (mcfg.get("llm_nos") or [])] if mcfg else []
+        for m in existing:
+            mv = name2var.get(m)
+            if mv is not None and ("native" in mv) != new_is_native:
+                raise ValueError("aggregation channel requires all-Native or all-non-Native models")
+        text = self._mykey_file().read_text(encoding="utf-8")
+        if not cfg.get("name"):
+            text = self._patch_var_block(text, var, {**cfg, "name": name})
+        if mcfg is None:
+            mcfg, mvar, existing = {"llm_nos": [], "max_retries": 10, "base_delay": 0.5}, "mixin_config", []
+        if name not in existing:
+            existing.append(name)
+        mcfg = {**mcfg, "llm_nos": existing}
+        if self._find_var_block_span(text, mvar):
+            text = self._patch_var_block(text, mvar, mcfg)
+        else:
+            text = text.rstrip() + f"\n{mvar} = {self._format_py_dict(mcfg)}\n"
+        return {"profiles": self._save_mykey_text(text)}
+
+    def remove_from_mixin(self, profile_id: int) -> dict:
+        """把一个基本模型移出主聚合渠道。"""
+        var, cfg = self._profile_at(profile_id)
+        name = str(cfg.get("name") or cfg.get("model") or "").strip()
+        keys, mk = self._mykey_vars()
+        mvar, mcfg = self._mixin_entry(keys, mk)
+        if not mcfg or mvar is None:
+            return {"profiles": self.list_model_profiles()}
+        members = [str(m) for m in (mcfg.get("llm_nos") or []) if str(m) != name]
+        mcfg = {**mcfg, "llm_nos": members}
+        text = self._patch_var_block(self._mykey_file().read_text(encoding="utf-8"), mvar, mcfg)
+        return {"profiles": self._save_mykey_text(text)}
+
+    def reorder_mixin(self, members: list) -> dict:
+        """按前端拖拽后的顺序重写主渠道组 llm_nos。只接受当前成员的重排，不增删。"""
+        keys, mk = self._mykey_vars()
+        mvar, mcfg = self._mixin_entry(keys, mk)
+        if not mcfg or mvar is None:
+            raise ValueError("mixin channel not found")
+        old = [str(m) for m in (mcfg.get("llm_nos") or [])]
+        new = [str(m) for m in (members or [])]
+        if len(new) != len(old) or Counter(new) != Counter(old):
+            raise ValueError("reorder must contain the same channel members")
+        if new == old:
+            return {"profiles": self.list_model_profiles()}
+        mcfg = {**mcfg, "llm_nos": new}
+        text = self._patch_var_block(self._mykey_file().read_text(encoding="utf-8"), mvar, mcfg)
+        return {"profiles": self._save_mykey_text(text)}
+
+    @staticmethod
+    def _live_model(sess: Session) -> Optional[dict]:
+        """该会话 agent 当前真正在用的模型(渠道组会随故障转移变化)。
+        agent 还没建(没跑过 turn)时返回静态绑定信息,前端据 llmNo 回显选择器。
+        llmNo: agent 存活取 agent.llm_no(权威运行态),否则取 sess.llm_no(可能 None)。"""
+        ag = getattr(sess, "agent", None)
+        if ag is None:
+            return {"current": None, "isMixin": False, "llmNo": sess.llm_no}
+        try:
+            back = ag.llmclient.backend
+            live_no = getattr(ag, "llm_no", sess.llm_no)
+            if "Mixin" in type(back).__name__:
+                return {"current": back.current_name, "isMixin": True, "llmNo": live_no}
+            return {"current": back.name, "isMixin": False, "llmNo": live_no}
+        except Exception:
+            return {"current": None, "isMixin": False, "llmNo": sess.llm_no}
 
     def snapshot(self, sess: Session, include_messages: bool = True) -> dict:
         out = {
@@ -382,6 +538,7 @@ class AgentManager:
             "msgSeq": sess.msg_seq,
             "pinned": sess.pinned,
             "untitled": sess.untitled,
+            "model": self._live_model(sess),
         }
         if include_messages:
             out["messages"] = list(sess.messages)
@@ -401,7 +558,7 @@ class AgentManager:
 
     def create_session(self, cwd: Optional[str] = None) -> Session:
         sid = "sess-" + uuid.uuid4().hex[:12]
-        sess = Session(id=sid, cwd=str(cwd or self.ga_root))
+        sess = Session(id=sid, cwd=str(cwd or self.ga_root), llm_no=_global_default_llm_no())
         with self.lock:
             self.sessions[sid] = sess
             self.active_session_id = sid
@@ -431,10 +588,8 @@ class AgentManager:
         _purge_session_uploads(sid)
         return {"ok": True, "sessionId": sid}
 
-    def submit_prompt(self, sid: str, prompt: Any, images: Optional[list] = None, llm_no: Optional[int] = None, display: Optional[str] = None, files_meta: Optional[list] = None, image_metas: Optional[list] = None) -> dict:
+    def submit_prompt(self, sid: str, prompt: Any, images: Optional[list] = None, display: Optional[str] = None, files_meta: Optional[list] = None, image_metas: Optional[list] = None) -> dict:
         prompt, image_ids = normalize_prompt(prompt, images)
-        if llm_no is not None:
-            self.config["llmNo"] = int(llm_no)
         with self.lock:
             sess = self.sessions.get(sid)
             if not sess:
@@ -460,19 +615,20 @@ class AgentManager:
             sess.last_error = ""
             sess.partial = {"id": sess.msg_seq + 1, "role": "assistant", "content": "", "ts": time.time(), "partial": True,
                             "curr_turn": 0, "turn_segs": []}  # turn_segs[i]=第i轮全文(权威结构化,前端按轮渲染);content保留双轨兜底
-            t = threading.Thread(target=self.run_agent_turn, args=(sess, prompt, None, llm_no), daemon=True, name=f"Turn-{sid}")
+            t = threading.Thread(target=self.run_agent_turn, args=(sess, prompt, None), daemon=True, name=f"Turn-{sid}")
             sess.thread = t
             t.start()
             seq = sess.msg_seq
         emit_session_state(sess, "running")
         return {"ok": True, "sessionId": sid, "accepted": True, "userMessageId": user_msg["id"], "seq": seq}
 
-    def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None, llm_no: Optional[int] = None):
+    def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None):
         try:
             if sess.agent is None:
                 sess.agent = self.make_agent(sess)
             agent = sess.agent
-            no = self.config.get("llmNo") if llm_no is None else llm_no
+            # 模型取会话绑定 sess.llm_no,未绑定回退全局默认。切换走 set_session_model。
+            no = sess.llm_no if sess.llm_no is not None else _global_default_llm_no()
             if no is not None and hasattr(agent, "next_llm"):
                 with contextlib.suppress(Exception):
                     agent.next_llm(int(no))
@@ -587,6 +743,7 @@ class AgentManager:
                 "msgSeq": sess.msg_seq,
                 "updatedAt": sess.updated_at,
                 "lastError": sess.last_error,
+                "model": self._live_model(sess),
             }
 
     def plan_snapshot(self, sid: str) -> dict:
@@ -628,6 +785,11 @@ class AgentManager:
             if sess.agent is not None:
                 return {"ok": True, "sessionId": sid, "restored": False, "reason": "agent already alive"}
         agent = self.make_agent(sess)
+        # 恢复 agent 时按会话绑定 seed 模型(未绑定则全局默认),保持显示/使用一致。
+        no = sess.llm_no if sess.llm_no is not None else _global_default_llm_no()
+        if no is not None and hasattr(agent, "next_llm"):
+            with contextlib.suppress(Exception):
+                agent.next_llm(int(no))
         if sess.llm_history:
             try:
                 agent.llmclient.backend.history = sess.llm_history
@@ -651,6 +813,21 @@ class AgentManager:
             sess.agent = agent
             sess.status = "idle"
         return {"ok": True, "sessionId": sid, "restored": True, "messageCount": len(sess.llm_history or sess.messages)}
+
+    def set_session_model(self, sid: str, llm_no: int) -> dict:
+        """前端申请切换某会话的模型(唯一入口)。写 sess.llm_no(权威)并持久化;
+        agent 存活时立即 next_llm 让运行态跟上。返回该会话的运行态模型快照。"""
+        with self.lock:
+            sess = self.sessions.get(sid)
+            if not sess:
+                raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
+            sess.llm_no = int(llm_no)
+            if sess.agent is not None and hasattr(sess.agent, "next_llm"):
+                with contextlib.suppress(Exception):
+                    sess.agent.next_llm(int(llm_no))
+            sess.updated_at = time.time()
+        self._persist()
+        return {"ok": True, "sessionId": sid, "llmNo": sess.llm_no, "model": self._live_model(sess)}
 
 
 import base64
@@ -755,6 +932,15 @@ def discover_extra_services(ga_root: Path) -> List[dict]:
         out.append({
             "id": "reflect/scheduler.py",
             "cmd": [sys.executable, "agentmain.py", "--reflect", "reflect/scheduler.py"],
+        })
+    # conductor 跟 scheduler 一样,bridge 启动时自动拉起。--no-browser 是关键:
+    # conductor.py 默认会用 webbrowser.open 在用户浏览器弹一个 8900 端口 UI,
+    # 桌面版自启时不需要这个独立 UI(用户从「指挥家」页直接访问)。
+    conductor = ga_root / "frontends" / "conductor.py"
+    if conductor.is_file():
+        out.append({
+            "id": "frontends/conductor.py",
+            "cmd": [sys.executable, "frontends/conductor.py", "--no-browser"],
         })
     return out
 
@@ -868,7 +1054,7 @@ class ServiceManager:
 
     def list_panel_state(self) -> List[dict]:
         out = [self._bridge_state()]
-        for sid in sorted(self._catalog):
+        for sid in sorted(self._catalog, key=lambda s: (s in self._im_catalog, s)):
             item = self._state(sid)
             item["name"] = sid
             item["memMb"] = _mem_mb(item.get("pid"))
@@ -908,10 +1094,10 @@ class ServiceManager:
             self._notify(sid, err=err)
             return {"ok": False, "error": "not_configured", "service": self._state(sid, err=err)}
         self.buffers[sid] = deque(maxlen=500)
-        env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
         kw: Dict[str, Any] = dict(
             cwd=str(self.ga_root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, env=env,
+            text=True, encoding="utf-8", errors="replace", bufsize=1, env=env,
         )
         if sys.platform == "win32":
             kw["creationflags"] = subprocess.CREATE_NO_WINDOW
@@ -936,6 +1122,42 @@ class ServiceManager:
             except Exception as e:
                 tag = f"exception {type(e).__name__}: {e}"
             print(f"[autostart] {sid}: {tag}", file=sys.stderr)
+
+    def stop_all_extras(self) -> None:
+        for sid in sorted(set(self._catalog) - set(self._im_catalog)):
+            with contextlib.suppress(Exception):
+                self.stop_service(sid)
+
+    def _extra_is_broken(self, sid: str) -> bool:
+        """判断一个 extra 是否「已经坏掉、需要重启才能恢复」:
+          - 进程异常退出(非用户主动停)→ 坏(覆盖 scheduler 那种进程级崩溃);
+          - 进程还活着,但捕获日志里出现 `Exception in thread conductor-agent`
+            → 内部 agent 线程已崩死,uvicorn 还在跑但再也处理不了任务 → 坏。
+        健康运行中的进程返回 False:它会在下个任务靠自身 mtime 热重载读到新 mykey,
+        不该被打断。每次 start_service 都会换新缓冲,故缓冲里的崩溃签名只反映当前进程。"""
+        proc = self.procs.get(sid)
+        if proc is None:
+            return False                       # 没起过 / 用户主动停掉 → 不复活
+        if proc.poll() is not None:
+            return sid not in self._stopping   # 意外退出 = 坏
+        buf = self.buffers.get(sid)
+        return bool(buf) and any("Exception in thread conductor-agent" in ln for ln in buf)
+
+    def restart_broken_extras(self) -> None:
+        """mykey 被整体重写(导入密钥/编辑渠道配置)后,只重启「已经坏掉」的
+        conductor/scheduler。健康运行中的进程不动——它们会在下个任务靠自身 mtime
+        热重载新 key,强行重启反而会打断正在跑的任务。"""
+        for sid in sorted(set(self._catalog) - set(self._im_catalog)):
+            if not self._extra_is_broken(sid):
+                continue
+            with contextlib.suppress(Exception):
+                self.stop_service(sid)
+            try:
+                res = self.start_service(sid)
+                tag = "ok" if res.get("ok") else f"fail: {res.get('error')}"
+            except Exception as e:
+                tag = f"exception {type(e).__name__}: {e}"
+            print(f"[restart-broken] {sid}: {tag}", file=sys.stderr)
 
     def stop_service(self, sid: str) -> dict:
         if sid not in self._catalog:
@@ -963,6 +1185,14 @@ class ServiceManager:
 
 
 services = ServiceManager(str(DEFAULT_GA_ROOT), hub.emit)
+
+
+def _bridge_shutdown_services() -> None:
+    with contextlib.suppress(Exception):
+        services.stop_all_extras()
+
+
+atexit.register(_bridge_shutdown_services)
 
 
 def emit_session_state(sess: Session, state_name: str):
@@ -1010,7 +1240,7 @@ async def ws_handler(request):
 def cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
     }
 
@@ -1138,12 +1368,35 @@ _SETTINGS = Path.home() / ".ga_desktop_settings.json"
 _UI_KEYS = ("lang", "theme", "appearance", "plain", "llmNo", "fontSize")
 
 
-def _desktop_ui() -> dict:
+def _settings_doc() -> dict:
     try:
-        ui = json.loads(_SETTINGS.read_text(encoding="utf-8")).get("ui")
-        return dict(ui) if isinstance(ui, dict) else {}
+        doc = json.loads(_SETTINGS.read_text(encoding="utf-8")) if _SETTINGS.is_file() else {}
+        return doc if isinstance(doc, dict) else {}
     except Exception:
         return {}
+
+
+def _write_settings_doc(doc: dict) -> None:
+    _SETTINGS.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _desktop_ui() -> dict:
+    ui = _settings_doc().get("ui")
+    return dict(ui) if isinstance(ui, dict) else {}
+
+
+def _conductor_settings() -> dict:
+    conductor = _settings_doc().get("conductor")
+    return dict(conductor) if isinstance(conductor, dict) else {}
+
+
+def _global_default_llm_no() -> int:
+    """全局默认模型下标。会话未绑定(sess.llm_no is None)时回退到它。"""
+    no = _desktop_ui().get("llmNo")
+    try:
+        return int(no) if no is not None else 0
+    except (TypeError, ValueError):
+        return 0
 
 
 async def get_config_handler(request):
@@ -1153,6 +1406,7 @@ async def get_config_handler(request):
     if "llmNo" not in cfg:
         cfg["llmNo"] = active
     cfg.update(_desktop_ui())
+    cfg["conductor"] = _conductor_settings()
     return json_ok({"gaRoot": manager.ga_root, "mykeyPath": manager.mykey_path, "config": cfg})
 
 
@@ -1163,13 +1417,11 @@ async def save_config_handler(request):
         patch = {k: cfg[k] for k in _UI_KEYS if k in cfg}
         if patch:
             try:
-                doc = json.loads(_SETTINGS.read_text(encoding="utf-8")) if _SETTINGS.is_file() else {}
-                if not isinstance(doc, dict):
-                    doc = {}
+                doc = _settings_doc()
                 ui = doc["ui"] if isinstance(doc.get("ui"), dict) else {}
                 ui.update(patch)
                 doc["ui"] = ui
-                _SETTINGS.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+                _write_settings_doc(doc)
             except Exception as e:
                 print(f"[bridge] save ui prefs failed: {e}", file=sys.stderr)
         manager.config.update(cfg)
@@ -1191,6 +1443,32 @@ async def model_profiles_handler(request):
         if request.method == "POST":
             return json_ok({"ok": True, **manager.add_model_profile(await read_json(request))})
         return json_ok({"profiles": manager.list_model_profiles()})
+    except ValueError as e:
+        return json_ok({"ok": False, "error": str(e)}, status=400)
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)}, status=500)
+
+
+async def mixin_handler(request):
+    """聚合渠道成员管理：POST 加入 / DELETE 移出 主聚合渠道。"""
+    try:
+        profile_id = int(request.match_info.get("id"))
+        if request.method == "POST":
+            return json_ok({"ok": True, **manager.add_to_mixin(profile_id)})
+        if request.method == "DELETE":
+            return json_ok({"ok": True, **manager.remove_from_mixin(profile_id)})
+        return json_ok({"ok": False, "error": "method not allowed"}, status=405)
+    except ValueError as e:
+        return json_ok({"ok": False, "error": str(e)}, status=400)
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)}, status=500)
+
+
+async def mixin_order_handler(request):
+    """渠道组成员拖拽排序：PUT {members:[name,...]}。"""
+    try:
+        data = await read_json(request)
+        return json_ok({"ok": True, **manager.reorder_mixin(data.get("members") or [])})
     except ValueError as e:
         return json_ok({"ok": False, "error": str(e)}, status=400)
     except Exception as e:
@@ -1246,10 +1524,9 @@ async def prompt_handler(request):
     display = data.get("display")
     files_meta = data.get("files") or []        # 非图片附件 [{name, path}]
     image_metas = data.get("imageMetas") or []   # 图片附件 [{name, path}]（不含 dataUrl）
-    llm_no = data.get("llmNo")
-    if llm_no is not None:
-        llm_no = int(llm_no)
-    return json_ok(manager.submit_prompt(sid, prompt, images, llm_no=llm_no, display=display,
+    # 模型不再随 prompt 携带:切换模型走 POST /session/{sid}/model 这一唯一入口,
+    # 发消息只使用会话已绑定的 sess.llm_no(未绑定则回退全局默认)。
+    return json_ok(manager.submit_prompt(sid, prompt, images, display=display,
                                           files_meta=files_meta, image_metas=image_metas))
 
 
@@ -1268,6 +1545,18 @@ async def cancel_handler(request):
 async def restore_handler(request):
     sid = request.match_info["sid"]
     return json_ok(manager.restore_context(sid))
+
+
+async def session_model_handler(request):
+    sid = request.match_info["sid"]
+    data = await read_json(request)
+    no = data.get("llmNo", data.get("llm_no"))
+    if no is None:
+        return json_ok({"ok": False, "error": "missing llmNo"}, status=400)
+    try:
+        return json_ok(manager.set_session_model(sid, int(no)))
+    except (TypeError, ValueError):
+        return json_ok({"ok": False, "error": "invalid llmNo"}, status=400)
 
 
 async def plan_handler(request):
@@ -1519,9 +1808,35 @@ async def mykey_save_handler(request):
     content = data.get("content")
     if content is None:
         return json_ok({"ok": False, "error": "missing_content"}, status=400)
-    target = _mykey_file()
-    target.write_text(str(content), encoding="utf-8")
-    return json_ok({"ok": True, "path": str(target)})
+    try:
+        profiles = manager._save_mykey_text(str(content))
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)}, status=400)
+    # 导入/整体重写 mykey 后,只有「已崩坏」的 conductor/scheduler 才重启(死了才救);
+    # 健康运行中的进程不打断,它们会在下个任务靠自身 mtime 热重载读到新 key。
+    services.restart_broken_extras()
+    return json_ok({"ok": True, "path": str(manager._mykey_file()), "profiles": profiles})
+
+
+async def conductor_model_get_handler(request):
+    return json_ok({"model": _conductor_settings()})
+
+
+async def conductor_model_save_handler(request):
+    data = await read_json(request)
+    try:
+        llm_no = int(data.get("llmNo"))
+    except (TypeError, ValueError):
+        return json_ok({"ok": False, "error": "invalid_llmNo"}, status=400)
+    try:
+        doc = _settings_doc()
+        conductor = doc["conductor"] if isinstance(doc.get("conductor"), dict) else {}
+        conductor["llmNo"] = llm_no
+        doc["conductor"] = conductor
+        _write_settings_doc(doc)
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)}, status=500)
+    return json_ok({"ok": True, "model": conductor})
 
 
 async def service_start_handler(request):
@@ -1553,6 +1868,43 @@ async def service_logs_handler(request):
 
 async def service_panel_handler(request):
     return json_ok({"services": services.list_panel_state()})
+
+
+def _is_local_peer(peer: str) -> bool:
+    p = (peer or "").strip()
+    return p in ("127.0.0.1", "::1") or p.startswith("::ffff:127.0.0.1")
+
+
+async def stop_extras_handler(request):
+    if not _is_local_peer(request.remote or ""):
+        return json_ok({"ok": False, "error": "forbidden"}, status=403)
+    services.stop_all_extras()
+    return json_ok({"ok": True})
+
+
+async def start_extras_handler(request):
+    if not _is_local_peer(request.remote or ""):
+        return json_ok({"ok": False, "error": "forbidden"}, status=403)
+    services.autostart_extras()
+    return json_ok({"ok": True})
+
+
+async def identity_handler(request):
+    return json_ok({"ga_root": str(DEFAULT_GA_ROOT), "app_dir": str(APP_DIR), "pid": os.getpid(),
+                    "build_id": os.environ.get("GA_BUILD_ID", "")})
+
+
+def _exit_bridge() -> None:
+    with contextlib.suppress(Exception):
+        services.stop_all_extras()
+    threading.Timer(0.4, lambda: os._exit(0)).start()
+
+
+async def bridge_exit_handler(request):
+    if not _is_local_peer(request.remote or ""):
+        return json_ok({"ok": False, "error": "forbidden"}, status=403)
+    _exit_bridge()
+    return json_ok({"ok": True})
 
 
 async def token_stats_handler(request):
@@ -1617,6 +1969,9 @@ def create_app():
     app.router.add_post("/config", save_config_handler)
     app.router.add_get("/model-profiles", model_profiles_handler)
     app.router.add_post("/model-profiles", model_profiles_handler)
+    app.router.add_put("/model-profiles/mixin/order", mixin_order_handler)
+    app.router.add_post("/model-profiles/{id}/mixin", mixin_handler)
+    app.router.add_delete("/model-profiles/{id}/mixin", mixin_handler)
     app.router.add_get("/model-profiles/{id}", model_profiles_handler)
     app.router.add_put("/model-profiles/{id}", model_profiles_handler)
     app.router.add_delete("/model-profiles/{id}", model_profiles_handler)
@@ -1630,6 +1985,7 @@ def create_app():
     app.router.add_get("/session/{sid}/plan", plan_handler)
     app.router.add_post("/session/{sid}/cancel", cancel_handler)
     app.router.add_post("/session/{sid}/restore", restore_handler)
+    app.router.add_post("/session/{sid}/model", session_model_handler)
     app.router.add_post("/path/open", path_open_handler)
     app.router.add_post("/upload", upload_handler)
     app.router.add_delete("/upload", upload_delete_handler)
@@ -1643,6 +1999,12 @@ def create_app():
     app.router.add_get("/services/panel", service_panel_handler)
     app.router.add_get("/services/mykey", mykey_get_handler)
     app.router.add_post("/services/mykey", mykey_save_handler)
+    app.router.add_get("/services/conductor/model", conductor_model_get_handler)
+    app.router.add_post("/services/conductor/model", conductor_model_save_handler)
+    app.router.add_post("/services/stop-extras", stop_extras_handler)
+    app.router.add_post("/services/start-extras", start_extras_handler)
+    app.router.add_get("/services/identity", identity_handler)
+    app.router.add_post("/services/bridge/exit", bridge_exit_handler)
 
     # Serve static frontend (desktop/static/)
     static_dir = APP_DIR / "desktop" / "static"
@@ -1660,7 +2022,11 @@ def create_app():
         hub.loop = asyncio.get_running_loop()
         services.autostart_extras()
 
+    async def on_shutdown(app):
+        services.stop_all_extras()
+
     app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
     return app
 
 
