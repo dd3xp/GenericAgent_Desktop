@@ -26,6 +26,11 @@ function applyToDOM(appearance: string, chatFontSize: number) {
   delete root.dataset.plain;
   root.dataset.chatFont = String(chatFontSize);
   root.style.setProperty('--chat-font', chatFontSize + 'px');
+  if (appearance === 'dark') {
+    document.body.setAttribute('theme-mode', 'dark');
+  } else {
+    document.body.removeAttribute('theme-mode');
+  }
 }
 
 interface SettingsState {

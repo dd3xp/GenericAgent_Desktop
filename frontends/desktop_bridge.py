@@ -658,6 +658,10 @@ class AgentManager:
                                         _segs[_idx] = str(_outs[-1])
                                         if len(_outs) >= 2 and _idx >= 1:
                                             _segs[_idx - 1] = str(_outs[-2])
+                                    # Push partial to frontend via WS for real-time streaming
+                                    hub.emit({"type": "partial-update", "sessionId": sid,
+                                              "content": sess.partial["content"],
+                                              "turn_segs": list(_segs), "curr_turn": _idx})
                         if "done" in item:
                             full = strip_final_info_marker(item.get("done") or "")
                             done_outputs = item.get("outputs")  # done时=turn_resps.copy()全量轮

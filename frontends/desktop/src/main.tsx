@@ -1,15 +1,16 @@
-import '../static/styles.css';
-import '../static/app.js';
+import '@semi-css';
+import './global.css';
 
-// CSS 已同步加载，恢复 transition
+if (document.documentElement.dataset.appearance === 'dark') {
+  document.body.setAttribute('theme-mode', 'dark');
+}
+
 setTimeout(() => {
   document.body.classList.remove('no-transition');
 }, 0);
 
 import { createRoot } from 'react-dom/client';
-import { SettingsModal } from './components/settings/SettingsModal';
+import { App } from './App';
 
-const settingsRoot = document.createElement('div');
-settingsRoot.id = 'settings-react-root';
-document.body.appendChild(settingsRoot);
-createRoot(settingsRoot).render(<SettingsModal />);
+const appRoot = document.getElementById('app')!;
+createRoot(appRoot).render(<App />);
