@@ -10,7 +10,6 @@ import { SessionSectionHeader } from './SessionSectionHeader';
 import { SessionRow } from './SessionRow';
 
 const NAV_ITEMS: { key: PageId; icon: string; textKey: string }[] = [
-  { key: 'chat', icon: 'comment', textKey: 'nav.chat' },
   { key: 'services', icon: 'symbol-misc', textKey: 'nav.services' },
   { key: 'collab', icon: 'robot', textKey: 'nav.collab' },
   { key: 'token', icon: 'graph', textKey: 'nav.token' },
@@ -23,7 +22,7 @@ export function LeftSidebar() {
   const sessions = useChatStore((s) => s.sessions);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const setActiveSession = useChatStore((s) => s.setActiveSession);
-  const status = useChatStore((s) => s.status);
+  const runningSessions = useChatStore((s) => s.runningSessions);
   const { t } = useI18n();
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,6 +52,16 @@ export function LeftSidebar() {
   return (
     <div className="ga-left-sidebar">
       <nav className="ga-nav-rail" aria-label="Main navigation">
+        <button
+          type="button"
+          className="ga-nav-btn"
+          onClick={handleNewSession}
+        >
+          <span className="ga-nav-icon">
+            <Codicon name="comment" size="1rem" />
+          </span>
+          <span className="ga-nav-label">{t('nav.chat')}</span>
+        </button>
         {NAV_ITEMS.map((item) => (
           <button
             key={item.key}
@@ -101,7 +110,7 @@ export function LeftSidebar() {
                   key={s.id}
                   session={s}
                   isActive={s.id === activeSessionId}
-                  isWorking={s.id === activeSessionId && status === 'running'}
+                  isWorking={runningSessions.has(s.id)}
                   onClick={() => handleSelectSession(s.id)}
                 />
               ))}
@@ -118,7 +127,6 @@ export function LeftSidebar() {
           aria-label={t('foot.settings')}
         >
           <Codicon name="settings-gear" size="1rem" />
-          <span>{t('foot.settings')}</span>
         </button>
       </div>
     </div>

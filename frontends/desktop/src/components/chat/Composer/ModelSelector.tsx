@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSettingsStore } from '../../../stores/settings';
 import { useI18n } from '../../../i18n';
 import type { ModelProfile } from '../../../services/bridge';
+import { PROVIDER_PRESETS } from '../../../data/model-presets';
+import { getProviderIcon, providerFromModel } from '../../../data/provider-icons';
 
 const PROVIDER_COLORS: Record<string, string> = {
   deepseek: '#4D6BFE',
@@ -12,17 +14,24 @@ const PROVIDER_COLORS: Record<string, string> = {
   openrouter: '#6366F1',
   google: '#4285F4',
   moonshot: '#7C3AED',
+  kimi: '#7C3AED',
+  doubao: '#006EFF',
+  minimax: '#F23F5D',
+  zhipu: '#3859FF',
+  stepfun: '#005AFF',
 };
 
-function providerColor(apibase: string): string {
+function providerColor(apibase: string, model?: string): string {
   const lower = (apibase || '').toLowerCase();
   for (const [key, color] of Object.entries(PROVIDER_COLORS)) {
     if (lower.includes(key)) return color;
   }
+  const fromModel = providerFromModel(model || '');
+  if (fromModel && PROVIDER_COLORS[fromModel]) return PROVIDER_COLORS[fromModel];
   return 'var(--semi-color-text-3, #8f959e)';
 }
 
-function providerName(apibase: string): string {
+function providerName(apibase: string, model?: string): string {
   const lower = (apibase || '').toLowerCase();
   if (lower.includes('deepseek')) return 'DEEPSEEK';
   if (lower.includes('dashscope') || lower.includes('qwen')) return 'QWEN';
@@ -30,7 +39,13 @@ function providerName(apibase: string): string {
   if (lower.includes('openai')) return 'OPENAI';
   if (lower.includes('openrouter')) return 'OPENROUTER';
   if (lower.includes('google')) return 'GOOGLE';
-  if (lower.includes('moonshot')) return 'MOONSHOT';
+  if (lower.includes('moonshot')) return 'KIMI';
+  if (lower.includes('volces') || lower.includes('volcengine')) return 'DOUBAO';
+  if (lower.includes('minimax')) return 'MINIMAX';
+  if (lower.includes('bigmodel') || lower.includes('zhipu')) return 'ZHIPU';
+  if (lower.includes('stepfun')) return 'STEPFUN';
+  const fromModel = providerFromModel(model || '');
+  if (fromModel) return fromModel.toUpperCase();
   return 'OTHER';
 }
 
@@ -41,10 +56,52 @@ function profileLabel(name: string): string {
 }
 
 function modelShortName(profile: ModelProfile): string {
-  if (profile.name && profile.name.trim()) return profileLabel(profile.name);
   const m = profile.model || '';
   const slash = m.lastIndexOf('/');
-  return slash >= 0 ? m.slice(slash + 1) : m;
+  return slash >= 0 ? m.slice(slash + 1) : m || profileLabel(profile.name);
+}
+
+function findPresetByApibase(apibase: string, model?: string) {
+  if (apibase) {
+    let host: string;
+    try { host = new URL(apibase).hostname.toLowerCase(); } catch { host = ''; }
+    if (host) {
+      const match = PROVIDER_PRESETS.find((p) => {
+        try { return host === new URL(p.apibase).hostname.toLowerCase(); } catch { return false; }
+      });
+      if (match) return match;
+    }
+  }
+  const key = providerFromModel(model || '');
+  if (key) return PROVIDER_PRESETS.find((p) => p.key === key);
+  return undefined;
+}
+
+function ProviderIcon({ apibase, model, size = 14 }: { apibase: string; model?: string; size?: number }) {
+  const preset = findPresetByApibase(apibase, model);
+  const providerKey = providerFromModel(model || '');
+  const iconDef = providerKey ? getProviderIcon(providerKey) : undefined;
+
+  const icon = preset || iconDef;
+  if (!icon) {
+    return <span data-slot="provider-dot" style={{ background: providerColor(apibase, model) }} />;
+  }
+  return (
+    <svg
+      data-slot="provider-icon"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={icon.color}
+      fillRule="evenodd"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {Array.isArray(icon.iconPath)
+        ? icon.iconPath.map((d, i) => <path key={i} d={d} />)
+        : <path d={icon.iconPath} />
+      }
+    </svg>
+  );
 }
 
 interface GroupedProfiles {
@@ -62,9 +119,9 @@ function groupByProvider(profiles: ModelProfile[]): { groups: GroupedProfiles[];
       mixins.push({ profile: p, idx });
       return;
     }
-    const provider = providerName(p.apibase);
+    const provider = providerName(p.apibase, p.model);
     if (!map.has(provider)) {
-      map.set(provider, { provider, color: providerColor(p.apibase), items: [] });
+      map.set(provider, { provider, color: providerColor(p.apibase, p.model), items: [] });
     }
     map.get(provider)!.items.push({ profile: p, idx });
   });
@@ -231,7 +288,7 @@ export function ModelSelector() {
             {filteredGroups.map((group) => (
               <div key={group.provider} data-slot="model-menu-section">
                 <div data-slot="model-menu-section-header">
-                  <span data-slot="provider-dot" style={{ background: group.color }} />
+                  <ProviderIcon apibase={group.items[0]?.profile.apibase || ''} model={group.items[0]?.profile.model} />
                   {group.provider}
                 </div>
                 {group.items.map(({ profile: p, idx }) => (
@@ -284,8 +341,8 @@ export function ModelSelector() {
                             const member = profiles.find((pp) => pp.name === memberName);
                             return (
                               <div key={memberName} data-slot="mixin-member">
-                                <span data-slot="provider-dot" style={{ background: member ? providerColor(member.apibase) : 'var(--semi-color-text-3)' }} />
-                                {member ? modelShortName(member) : String(memberName)}
+                                <ProviderIcon apibase={member?.apibase || ''} model={member?.model} size={12} />
+                                <span data-slot="model-menu-name">{member ? modelShortName(member) : String(memberName)}</span>
                               </div>
                             );
                           })}

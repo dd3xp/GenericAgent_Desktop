@@ -4,28 +4,51 @@ import { useSettingsStore } from '../../stores/settings';
 import { useI18n } from '../../i18n';
 import * as bridge from '../../services/bridge';
 import type { ModelProfile } from '../../services/bridge';
-import { AddModelModal } from './AddModelModal';
+import { getProviderIcon, providerFromModel } from '../../data/provider-icons';
 
-function profileLabel(p: ModelProfile): string {
-  if (p.name && p.name.trim()) {
-    const s = p.name;
-    const i = s.indexOf('/');
-    return (i >= 0 ? s.slice(i + 1) : s).trim();
-  }
-  const m = p.model || '';
-  const slash = m.lastIndexOf('/');
-  return slash >= 0 ? m.slice(slash + 1) : m;
+function ModelIcon({ model, size = 16 }: { model: string; size?: number }) {
+  const key = providerFromModel(model);
+  const def = key ? getProviderIcon(key) : undefined;
+  if (!def) return null;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={def.color}
+      fillRule="evenodd"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ flexShrink: 0 }}
+    >
+      {Array.isArray(def.iconPath)
+        ? def.iconPath.map((d, i) => <path key={i} d={d} />)
+        : <path d={def.iconPath} />
+      }
+    </svg>
+  );
 }
 
-export function ModelSection() {
+function profileLabel(p: ModelProfile): string {
+  const m = p.model || '';
+  const slash = m.lastIndexOf('/');
+  if (m) return slash >= 0 ? m.slice(slash + 1) : m;
+  const s = (p.name || '').trim();
+  const i = s.indexOf('/');
+  return (i >= 0 ? s.slice(i + 1) : s) || '(unnamed)';
+}
+
+interface Props {
+  onAdd: () => void;
+  onEdit: (id: number) => void;
+}
+
+export function ModelSection({ onAdd, onEdit }: Props) {
   const { t } = useI18n();
   const modelProfiles = useSettingsStore((s) => s.modelProfiles);
   const selectedModelNo = useSettingsStore((s) => s.selectedModelNo);
   const selectModel = useSettingsStore((s) => s.selectModel);
   const setModelProfiles = useSettingsStore((s) => s.setModelProfiles);
 
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [mixinExpanded, setMixinExpanded] = useState(true);
 
   const mixin = modelProfiles.find((p) => p.kind === 'mixin');
@@ -48,14 +71,12 @@ export function ModelSection() {
   }, [setModelProfiles, t]);
 
   const handleEdit = useCallback((id: number) => {
-    setEditingId(id);
-    setAddModalVisible(true);
-  }, []);
+    onEdit(id);
+  }, [onEdit]);
 
   const handleAdd = useCallback(() => {
-    setEditingId(null);
-    setAddModalVisible(true);
-  }, []);
+    onAdd();
+  }, [onAdd]);
 
   const handleAddToMixin = useCallback(async (id: number) => {
     try {
@@ -138,6 +159,7 @@ export function ModelSection() {
                     return (
                       <div key={memberName} className="ga-mixin-member">
                         <span className="ga-mixin-member-rank">{i + 1}</span>
+                        <ModelIcon model={memberProfile?.model || ''} size={14} />
                         <span className="ga-mixin-member-name">{label}</span>
                         <span className="ga-mixin-member-actions">
                           <button
@@ -187,6 +209,7 @@ export function ModelSection() {
               onClick={() => handleSelect(actualIdx)}
             >
               <div className="ga-model-row-content">
+                <ModelIcon model={profile.model || ''} />
                 <span className="ga-model-name">{profileLabel(profile)}</span>
                 {isSelected && <Tag color="green" size="small">{t('set.current')}</Tag>}
                 {profile.inMixin && <Tag size="small">{t('model.inMixin')}</Tag>}
@@ -227,12 +250,6 @@ export function ModelSection() {
       <Button type="tertiary" onClick={handleAdd} className="ga-add-model-btn">
         + {t('set.addModel')}
       </Button>
-
-      <AddModelModal
-        visible={addModalVisible}
-        editingId={editingId}
-        onClose={() => setAddModalVisible(false)}
-      />
     </div>
   );
 }

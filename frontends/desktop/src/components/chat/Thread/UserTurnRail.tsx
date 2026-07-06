@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Message } from '../../../services/chat';
 import './UserTurnRail.css';
 
-const MIN_TURNS = 4;
+const MIN_TURNS = 3;
 const MAX_PREVIEW_CHARS = 40;
 
 interface Props {
@@ -34,6 +34,7 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll }:
   const [hovered, setHovered] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const observedIds = useRef<Set<string>>(new Set());
 
   const handleMouseEnter = useCallback(() => {
     if (leaveTimer.current) {
@@ -56,77 +57,57 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll }:
     const root = document.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
     if (!root) return;
 
-    observerRef.current?.disconnect();
+    if (!observerRef.current) {
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => Math.abs(a.boundingClientRect.top) - Math.abs(b.boundingClientRect.top));
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => Math.abs(a.boundingClientRect.top) - Math.abs(b.boundingClientRect.top));
-
-        const nearest = visible[0];
-        if (nearest) {
-          const id = nearest.target.getAttribute('data-msg-id');
-          if (id) setActiveId(id);
-        }
-      },
-      {
-        root,
-        rootMargin: '-20% 0px -65% 0px',
-        threshold: [0, 0.1, 0.5, 1],
-      },
-    );
-
-    observerRef.current = observer;
-
-    for (const turn of userTurns) {
-      const el = document.getElementById(`msg-${turn.id}`);
-      if (el) observer.observe(el);
+          const nearest = visible[0];
+          if (nearest) {
+            const id = nearest.target.getAttribute('data-msg-id');
+            if (id) setActiveId(id);
+          }
+        },
+        {
+          root,
+          rootMargin: '-20% 0px -65% 0px',
+          threshold: [0, 0.1, 0.5, 1],
+        },
+      );
     }
 
-    return () => observer.disconnect();
+    const observer = observerRef.current;
+
+    for (const turn of userTurns) {
+      if (observedIds.current.has(turn.id)) continue;
+      const el = document.getElementById(`msg-${turn.id}`);
+      if (el) {
+        observer.observe(el);
+        observedIds.current.add(turn.id);
+      }
+    }
+
+    return () => {
+      observer.disconnect();
+      observedIds.current.clear();
+      observerRef.current = null;
+    };
   }, [userTurns]);
 
   const handleJump = useCallback((id: string) => {
     const viewport = document.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
-    if (!viewport) return;
+    const el = document.getElementById(`msg-${id}`);
+    if (!viewport || !el) return;
 
-    const scrollToTarget = () => {
-      const el = document.getElementById(`msg-${id}`);
-      if (!el) return;
-      stopScroll();
-      const elRect = el.getBoundingClientRect();
-      const vpRect = viewport.getBoundingClientRect();
-      viewport.scrollTo({
-        top: viewport.scrollTop + (elRect.top - vpRect.top) - 16,
-        behavior: 'instant',
-      });
-    };
-
-    // If target already in DOM, jump immediately
-    if (document.getElementById(`msg-${id}`)) {
-      scrollToTarget();
-      return;
-    }
-
-    // Target is virtualized — expand hidden messages by clicking "show earlier"
-    const expandAndScroll = () => {
-      const btn = document.querySelector<HTMLButtonElement>('[data-slot="show-earlier"]');
-      if (btn) {
-        btn.click();
-        // Wait for React to re-render, then check again
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            if (document.getElementById(`msg-${id}`)) {
-              scrollToTarget();
-            } else {
-              expandAndScroll(); // keep expanding
-            }
-          }, 50);
-        });
-      }
-    };
-    expandAndScroll();
+    stopScroll();
+    const elRect = el.getBoundingClientRect();
+    const vpRect = viewport.getBoundingClientRect();
+    viewport.scrollTo({
+      top: viewport.scrollTop + (elRect.top - vpRect.top) - 16,
+      behavior: 'smooth',
+    });
   }, [stopScroll]);
 
   if (userTurns.length < MIN_TURNS) return null;
@@ -158,7 +139,6 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll }:
           <button
             key={turn.id}
             data-slot="rail-panel-item"
-            data-active={turn.id === activeId || undefined}
             onClick={() => handleJump(turn.id)}
           >
             {previewText(turn.content)}

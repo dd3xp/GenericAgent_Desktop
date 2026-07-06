@@ -127,11 +127,15 @@ export async function sendPrompt(
   // Upload images that only have base64 (pasted/dropped) to get file paths
   const imageMetas: { name: string; path: string }[] = [];
   for (const img of images || []) {
-    if (img.path && !img.path.startsWith('data:') && img.path !== img.name) {
+    const hasRealPath = img.path && !img.path.startsWith('data:') && img.path !== img.name;
+    if (hasRealPath) {
       imageMetas.push({ name: img.name, path: img.path });
-    } else if (img.base64) {
-      const path = await uploadImage(sessionId, img.name, img.base64);
-      imageMetas.push({ name: img.name, path });
+    } else {
+      const dataUrl = img.base64 || (img.path?.startsWith('data:') ? img.path : undefined);
+      if (dataUrl) {
+        const path = await uploadImage(sessionId, img.name, dataUrl);
+        imageMetas.push({ name: img.name, path });
+      }
     }
   }
 

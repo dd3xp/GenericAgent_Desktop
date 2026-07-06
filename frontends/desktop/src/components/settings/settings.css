@@ -1,7 +1,23 @@
-/* Settings Modal — React Island 样式 */
+/* Settings Modal — fixed center, inner scroll */
+
+.ga-settings-dialog .semi-modal-content {
+  padding-left: 24px;
+  padding-right: 0;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ga-settings-dialog .semi-modal-header {
+  padding-right: 24px;
+  flex-shrink: 0;
+}
 
 .ga-settings-dialog .semi-modal-body {
-  padding: 8px 0;
+  padding: 8px 24px 8px 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .ga-set-block {

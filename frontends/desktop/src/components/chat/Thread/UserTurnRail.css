@@ -7,7 +7,6 @@
   z-index: 100;
   display: flex;
   align-items: center;
-  gap: 0;
   pointer-events: auto;
 }
 
@@ -17,6 +16,10 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 0.25rem;
+}
+
+[data-slot="user-turn-rail"][data-expanded] [data-slot="rail-marks"] {
+  visibility: hidden;
 }
 
 [data-slot="rail-mark"] {
@@ -37,23 +40,17 @@
   height: 2px;
   border-radius: 999px;
   background: var(--semi-color-fill-2);
-  transition: width 120ms ease, background-color 120ms ease;
-}
-
-[data-slot="user-turn-rail"][data-expanded] [data-slot="rail-mark-line"] {
-  background: var(--semi-color-text-2);
+  transition: background-color 120ms ease;
 }
 
 [data-slot="rail-mark"][data-active] [data-slot="rail-mark-line"] {
-  width: 1.5rem;
   background: var(--semi-color-text-0);
 }
 
-/* Expanded panel — appears to the left of marks */
+/* Expanded panel — overlays the marks */
 [data-slot="rail-panel"] {
   position: absolute;
-  right: 100%;
-  padding-right: 0.25rem; /* visual gap via padding so mouse doesn't leave nav */
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -61,14 +58,11 @@
   gap: 1px;
   max-width: 260px;
   min-width: 140px;
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
-  padding-left: 0.25rem;
+  padding: 0.25rem;
   border-radius: 0.5rem;
   background: var(--semi-color-bg-3, #2a2a2a);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   z-index: 31;
-  /* Hidden by default — shown via [data-expanded] */
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
@@ -99,11 +93,7 @@
 
 [data-slot="rail-panel-item"]:hover {
   background: var(--semi-color-fill-1);
-}
-
-[data-slot="rail-panel-item"][data-active] {
   color: var(--semi-color-text-0);
-  background: var(--semi-color-fill-0);
 }
 
 /* Focus ring */

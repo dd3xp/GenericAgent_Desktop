@@ -13,9 +13,6 @@ export type ThreadGroup =
   | { kind: 'turn'; userMsg: Message; assistantMsg: Message; turns: Turn[] }
   | { kind: 'standalone'; msg: Message };
 
-export const RENDER_BUDGET_INITIAL = 8000;
-export const RENDER_BUDGET_STEP = 4000;
-
 function parseTurns(turnSegs: string[]): Turn[] {
   return turnSegs.map((seg, index) => {
     const segments = parseAgentContent(seg);
@@ -60,27 +57,3 @@ export function buildThreadGroups(messages: Message[]): ThreadGroup[] {
   return groups;
 }
 
-export function groupWeight(group: ThreadGroup): number {
-  if (group.kind === 'standalone') return group.msg.content.length;
-  return group.turns.reduce((acc, t) => acc + t.weight, 0);
-}
-
-export function computeVisibleRange(
-  groups: ThreadGroup[],
-  budget: number,
-): { firstVisible: number; hiddenCount: number } {
-  let accumulated = 0;
-  let firstVisible = groups.length - 1;
-
-  for (let i = groups.length - 1; i >= 0; i--) {
-    accumulated += groupWeight(groups[i]);
-    if (accumulated > budget) {
-      firstVisible = i + 1;
-      break;
-    }
-    firstVisible = i;
-  }
-
-  const clamped = Math.max(0, Math.min(firstVisible, groups.length - 1));
-  return { firstVisible: clamped, hiddenCount: clamped };
-}

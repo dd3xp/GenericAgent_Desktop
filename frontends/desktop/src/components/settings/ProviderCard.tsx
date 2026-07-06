@@ -25,7 +25,10 @@ export function ProviderCard({ preset, onClick }: Props) {
         fillRule="evenodd"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <path d={preset.iconPath} />
+        {Array.isArray(preset.iconPath)
+          ? preset.iconPath.map((d, i) => <path key={i} d={d} />)
+          : <path d={preset.iconPath} />
+        }
       </svg>
       <span className="ga-provider-card-body">
         <span className="ga-provider-card-label">{preset.label}</span>

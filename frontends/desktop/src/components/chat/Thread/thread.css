@@ -77,25 +77,6 @@
   font-size: var(--conversation-text-font-size);
 }
 
-/* ─── Show Earlier ─── */
-[data-slot="show-earlier"] {
-  display: block;
-  margin: 0 auto var(--conversation-turn-gap);
-  padding: 0.25rem 0.75rem;
-  font-size: 0.75rem;
-  border-radius: 9999px;
-  border: 1px solid var(--semi-color-border);
-  background: var(--semi-color-fill-0);
-  color: var(--semi-color-text-2);
-  cursor: pointer;
-  transition: background 0.12s;
-}
-
-[data-slot="show-earlier"]:hover {
-  background: var(--semi-color-fill-1);
-  color: var(--semi-color-text-0);
-}
-
 /* ─── Turn Pair ─── */
 [data-slot="aui_turn-pair"] {
   position: relative;

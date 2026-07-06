@@ -67,7 +67,7 @@
 
 [data-appearance="dark"] {
   --foreground: hsl(0 0% 95%);
-  --background: hsl(0 0% 8%);
+  --background: hsl(240 3% 7.5%);
 
   --ui-text-secondary: hsl(0 0% 78%);
   --ui-text-tertiary: hsl(0 0% 60%);
@@ -76,21 +76,21 @@
   --ui-icon-nav-active: hsl(0 0% 95%);
   --theme-primary: hsl(220 80% 68%);
 
-  --ui-row-hover-background: hsl(0 0% 15%);
-  --ui-row-active-background: hsl(0 0% 18%);
-  --ui-control-hover-background: hsl(0 0% 16%);
-  --ui-control-active-background: hsl(0 0% 22%);
-  --ui-sidebar-surface-background: hsl(0 0% 10%);
-  --ui-stroke-tertiary: hsl(0 0% 22%);
-  --sidebar-edge-border: hsl(0 0% 20%);
+  --ui-row-hover-background: hsl(220 3% 15%);
+  --ui-row-active-background: hsl(220 3% 18%);
+  --ui-control-hover-background: hsl(220 3% 16%);
+  --ui-control-active-background: hsl(220 3% 22%);
+  --ui-sidebar-surface-background: hsl(210 3% 12%);
+  --ui-stroke-tertiary: hsl(220 3% 22%);
+  --sidebar-edge-border: hsl(220 3% 20%);
   --ui-accent: hsl(220 80% 68%);
-  --chrome-action-hover: hsl(0 0% 18%);
+  --chrome-action-hover: hsl(220 3% 18%);
 
-  --dt-card: hsl(0 0% 14%);
-  --dt-background: hsl(0 0% 8%);
-  --ui-chat-surface-background: hsl(0 0% 8%);
-  --ui-chat-bubble-background: hsl(0 0% 14%);
-  --ui-stroke-secondary: hsl(0 0% 32%);
+  --dt-card: hsl(220 3% 14%);
+  --dt-background: hsl(240 3% 7.5%);
+  --ui-chat-surface-background: hsl(240 3% 7.5%);
+  --ui-chat-bubble-background: hsl(220 3% 14%);
+  --ui-stroke-secondary: hsl(220 3% 32%);
 }
 
 html, body, #app {
@@ -101,7 +101,7 @@ html, body, #app {
 }
 
 body {
-  background: var(--semi-color-bg-0);
+  background: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

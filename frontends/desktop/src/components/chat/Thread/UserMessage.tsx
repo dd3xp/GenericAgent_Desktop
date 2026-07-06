@@ -35,7 +35,7 @@ export const UserMessage = memo(function UserMessage({ content, msgId, images }:
             <img
               key={i}
               data-slot="user-image-thumb"
-              src={`${BRIDGE_BASE}/upload/raw?path=${encodeURIComponent(img.path)}`}
+              src={img.path.startsWith('data:') ? img.path : `${BRIDGE_BASE}/upload/raw?path=${encodeURIComponent(img.path)}`}
               alt={img.name}
             />
           ))}

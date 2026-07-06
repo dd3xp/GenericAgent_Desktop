@@ -21,6 +21,7 @@ interface ChatState {
   messages: Message[];
   status: 'idle' | 'running';
   sessions: SessionInfo[];
+  runningSessions: Set<string>;
   turnStartedAt: number | null;
   pendingQueue: QueuedMessage[];
 
@@ -120,6 +121,17 @@ export const useChatStore = create<ChatState>((set, get) => {
   // On session-state change
   subscribe('session-state', (data: unknown) => {
     const evt = data as { sessionId?: string; status?: string };
+    if (evt.sessionId && evt.status) {
+      set((s) => {
+        const next = new Set(s.runningSessions);
+        if (evt.status === 'running') {
+          next.add(evt.sessionId!);
+        } else {
+          next.delete(evt.sessionId!);
+        }
+        return { runningSessions: next };
+      });
+    }
     const { activeSessionId } = get();
     if (evt.sessionId && evt.sessionId === activeSessionId) {
       if (evt.status === 'running') {
@@ -165,13 +177,12 @@ export const useChatStore = create<ChatState>((set, get) => {
     messages: [],
     status: 'idle',
     sessions: [],
+    runningSessions: new Set(),
     turnStartedAt: null,
     pendingQueue: [],
 
     async newSession() {
-      const sessionId = await createSession();
-      set({ activeSessionId: sessionId, messages: [], status: 'idle', turnStartedAt: null, pendingQueue: [] });
-      get().loadSessions();
+      set({ activeSessionId: null, messages: [], status: 'idle', turnStartedAt: null, pendingQueue: [] });
     },
 
     async sendMessage(text: string, opts?: SendOptions) {
@@ -187,7 +198,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         return;
       }
       const now = Date.now();
-      const localImages = opts?.images?.map((f) => ({ name: f.name, path: f.path || f.name }));
+      const localImages = opts?.images?.map((f) => ({ name: f.name, path: f.base64 || f.path || f.name }));
       const userMsg: Message = { id: `local-${now}`, role: 'user', content: text, status: 'completed', createdAt: now, images: localImages };
       set((s) => ({ messages: [...s.messages, userMsg], status: 'running', turnStartedAt: now }));
       startPolling();

@@ -9,21 +9,25 @@ import { AttachmentStrip, type AttachmentFile } from './AttachmentStrip';
 import { SkillPanel } from './SkillPanel';
 import { PrimaryCTA, computeCTAState } from './PrimaryCTA';
 import { StatusStack } from './StatusStack';
+import { usePlaceholder } from './usePlaceholder';
 import './composer.css';
 
 interface Props {
   onSend: (text: string, opts?: SendOptions) => void;
   onStop: () => void;
   isGenerating: boolean;
+  editorRef?: React.RefObject<RichEditorHandle | null>;
 }
 
 let fileIdCounter = 0;
 
-export function Composer({ onSend, onStop, isGenerating }: Props) {
-  const editorRef = useRef<RichEditorHandle>(null);
+export function Composer({ onSend, onStop, isGenerating, editorRef: externalEditorRef }: Props) {
+  const internalEditorRef = useRef<RichEditorHandle>(null);
+  const editorRef = (externalEditorRef ?? internalEditorRef) as React.RefObject<RichEditorHandle>;
   const composerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const { text: placeholderText } = usePlaceholder();
   const [plainText, setPlainText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -73,14 +77,16 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
   const handleSend = useCallback(() => {
     const text = plainText.trim();
     if (!text && attachments.length === 0) return;
+    const readyImages = attachments.filter((a) => a.type === 'image' && a.status === 'ready');
+    const pendingImages = attachments.filter((a) => a.type === 'image' && a.status === 'uploading');
+    if (pendingImages.length > 0) return;
     const opts: SendOptions = {};
     const files = attachments.filter((a) => a.type === 'file');
-    const images = attachments.filter((a) => a.type === 'image');
     if (files.length > 0) {
       opts.files = files.map((f) => ({ name: f.name, path: f.path || f.name, size: f.size }));
     }
-    if (images.length > 0) {
-      opts.images = images.map((f) => ({ name: f.name, path: f.path || f.name, base64: f.preview }));
+    if (readyImages.length > 0) {
+      opts.images = readyImages.map((f) => ({ name: f.name, path: f.path || f.name, base64: f.preview! }));
     }
     onSend(text || '', Object.keys(opts).length > 0 ? opts : undefined);
     editorRef.current?.clear();
@@ -198,7 +204,8 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
   }, [processFiles]);
 
   const hasContent = plainText.trim().length > 0 || attachments.length > 0;
-  const ctaState = computeCTAState(isGenerating, hasContent);
+  const hasPendingUploads = attachments.some((a) => a.type === 'image' && a.status === 'uploading');
+  const ctaState = computeCTAState(isGenerating, hasContent, hasPendingUploads);
 
   return (
     <div
@@ -227,7 +234,7 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
         <div data-slot="composer-input-row">
           <RichEditorInput
             ref={editorRef}
-            placeholder="Send a message…"
+            placeholder={placeholderText}
             disabled={false}
             onInput={handleEditorInput}
             onKeyDown={handleKeyDown}

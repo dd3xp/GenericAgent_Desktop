@@ -102,6 +102,21 @@ export async function getModelProfiles(): Promise<ModelProfile[]> {
   }
 }
 
+export async function getModelProfileDetail(id: number): Promise<ModelProfile | null> {
+  if (isBridgeAvailable()) {
+    try {
+      const res = await ga()!.rpc('model-profiles/get', { id }) as { profile: ModelProfile };
+      return res.profile || null;
+    } catch { /* fall through */ }
+  }
+  try {
+    const res = await devFetch(`/model-profiles/${id}`) as { profile: ModelProfile };
+    return res.profile || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function addModelProfile(data: Partial<ModelProfile>): Promise<ModelProfile[]> {
   if (isBridgeAvailable()) {
     const res = await ga()!.rpc('model-profiles/add', data) as { profiles: ModelProfile[] };
