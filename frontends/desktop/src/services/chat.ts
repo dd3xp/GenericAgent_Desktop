@@ -78,6 +78,8 @@ export async function sendPrompt(
   sessionId: string,
   prompt: string,
   llmNo: number = 0,
+  files?: { name: string; path: string; size?: number }[],
+  images?: { name: string; path: string; base64?: string }[],
 ): Promise<string> {
   if (useMock()) {
     const now = Date.now();
@@ -105,10 +107,13 @@ export async function sendPrompt(
     return userMsg.id;
   }
 
+  const filesMeta = (files || []).map((f) => ({ name: f.name, path: f.path, size: f.size }));
+  const imageMetas = (images || []).map((f) => ({ name: f.name, path: f.path, base64: f.base64 }));
+
   const res = await fetch(`${BRIDGE_BASE}/session/${sessionId}/prompt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, prompt, display: prompt, llmNo, files: [], imageMetas: [] }),
+    body: JSON.stringify({ sessionId, prompt, display: prompt, llmNo, files: filesMeta, imageMetas }),
   });
   const data = await res.json();
   return data.userMessageId;
@@ -168,4 +173,22 @@ export async function deleteSession(sessionId: string): Promise<void> {
     return;
   }
   await fetch(`${BRIDGE_BASE}/session/${sessionId}`, { method: 'DELETE' });
+}
+
+export async function renameSession(sessionId: string, title: string): Promise<void> {
+  if (useMock()) return;
+  await fetch(`${BRIDGE_BASE}/session/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function pinSession(sessionId: string, pinned: boolean): Promise<void> {
+  if (useMock()) return;
+  await fetch(`${BRIDGE_BASE}/session/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinned }),
+  });
 }

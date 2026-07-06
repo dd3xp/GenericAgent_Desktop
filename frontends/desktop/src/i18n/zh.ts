@@ -321,4 +321,9 @@ export const zh: Record<string, string> = {
   'ask.banner': 'GA 等你回答',
   'ask.replyHint': '在下方输入框回复',
   'ask.placeholderOpen': '在此输入你的回答… (Enter 发送)',
+  'session.rename': '重命名',
+  'session.pin': '置顶',
+  'session.unpin': '取消置顶',
+  'session.delete': '删除',
+  'session.deleteConfirm': '确定删除这个会话吗？',
 };

@@ -29,6 +29,8 @@ export function LeftSidebar() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const sorted = [...sessions].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
     const ta = Number(a.updatedAt || a.createdAt || 0);
     const tb = Number(b.updatedAt || b.createdAt || 0);
     return tb - ta;

@@ -1,4 +1,9 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Dropdown, Modal } from '@douyinfe/semi-ui';
 import type { SessionInfo } from '../../services/chat';
+import { useChatStore } from '../../stores/chat';
+import { useI18n } from '../../i18n';
+import { Codicon } from '../../lib/icons';
 
 function formatAge(dateVal?: number | string): string {
   if (!dateVal) return '';
@@ -24,19 +29,134 @@ export function SessionRow({
   isWorking?: boolean;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
+  const renameSession = useChatStore((s) => s.renameSession);
+  const deleteSession = useChatStore((s) => s.deleteSession);
+  const pinSession = useChatStore((s) => s.pinSession);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renaming) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [renaming]);
+
+  const handleRenameStart = useCallback(() => {
+    setRenameValue(session.title || '');
+    setRenaming(true);
+    setMenuOpen(false);
+  }, [session.title]);
+
+  const handleRenameConfirm = useCallback(() => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== session.title) {
+      renameSession(session.id, trimmed);
+    }
+    setRenaming(false);
+  }, [renameValue, session.id, session.title, renameSession]);
+
+  const handleRenameCancel = useCallback(() => {
+    setRenaming(false);
+  }, []);
+
+  const handleRenameKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleRenameConfirm();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleRenameCancel();
+    }
+  }, [handleRenameConfirm, handleRenameCancel]);
+
+  const handlePin = useCallback(() => {
+    setMenuOpen(false);
+    setTimeout(() => pinSession(session.id, !session.pinned), 0);
+  }, [session.id, session.pinned, pinSession]);
+
+  const handleDelete = useCallback(() => {
+    setMenuOpen(false);
+    setTimeout(() => {
+      Modal.confirm({
+        title: t('session.delete'),
+        content: t('session.deleteConfirm'),
+        okType: 'danger',
+        onOk: () => deleteSession(session.id),
+      });
+    }, 0);
+  }, [session.id, deleteSession, t]);
+
+  const menu = (
+    <Dropdown.Menu>
+      <Dropdown.Item onClick={handleRenameStart}>
+        {t('session.rename')}
+      </Dropdown.Item>
+      <Dropdown.Item onClick={handlePin}>
+        {session.pinned ? t('session.unpin') : t('session.pin')}
+      </Dropdown.Item>
+      <Dropdown.Item type="danger" onClick={handleDelete}>
+        {t('session.delete')}
+      </Dropdown.Item>
+    </Dropdown.Menu>
+  );
+
   return (
-    <button
-      type="button"
+    <div
       className={`ga-session-item${isActive ? ' active' : ''}`}
-      onClick={onClick}
+      onClick={renaming ? undefined : onClick}
     >
       <span className="ga-session-content">
         <span className={`ga-status-dot${isWorking ? ' working' : ''}`} />
-        <span className="ga-session-title">
-          {session.title || 'Untitled'}
-        </span>
+        {renaming ? (
+          <input
+            ref={inputRef}
+            className="ga-session-rename-input"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={handleRenameKeyDown}
+            onBlur={handleRenameConfirm}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="ga-session-title">
+            {session.title || 'Untitled'}
+          </span>
+        )}
       </span>
-      <span className="ga-session-age">{formatAge(session.updatedAt)}</span>
-    </button>
+
+      {!renaming && (
+        <>
+          {session.pinned && (
+            <span className="ga-session-pin-icon">
+              <Codicon name="pinned" size="0.875rem" />
+            </span>
+          )}
+          <span className="ga-session-age">{formatAge(session.updatedAt)}</span>
+          <span className={`ga-session-actions${menuOpen ? ' menu-open' : ''}`}>
+            <Dropdown
+              trigger="click"
+              position="bottomRight"
+              visible={menuOpen}
+              onVisibleChange={setMenuOpen}
+              render={menu}
+            >
+              <button
+                type="button"
+                className="ga-session-actions-btn"
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Session actions"
+              >
+                <Codicon name="kebab-vertical" size="0.875rem" />
+              </button>
+            </Dropdown>
+          </span>
+        </>
+      )}
+    </div>
   );
 }

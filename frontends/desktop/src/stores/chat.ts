@@ -1,9 +1,15 @@
 import { create } from 'zustand';
-import { createSession, sendPrompt, pollMessages, cancelGeneration, listSessions, type Message, type SessionInfo } from '../services/chat';
+import { createSession, sendPrompt, pollMessages, cancelGeneration, listSessions, deleteSession as apiDeleteSession, renameSession as apiRenameSession, pinSession as apiPinSession, type Message, type SessionInfo } from '../services/chat';
 import { subscribe } from '../services/ws';
+import { useSettingsStore } from './settings';
 
 const PARTIAL_MSG_ID = '__partial__';
 const POLL_INTERVAL_MS = 1000;
+
+export interface SendOptions {
+  files?: { name: string; path: string; size?: number }[];
+  images?: { name: string; path: string; base64?: string }[];
+}
 
 interface ChatState {
   activeSessionId: string | null;
@@ -13,10 +19,13 @@ interface ChatState {
   turnStartedAt: number | null;
 
   newSession: () => Promise<void>;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, opts?: SendOptions) => Promise<void>;
   cancel: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   loadSessions: () => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
+  renameSession: (id: string, title: string) => Promise<void>;
+  pinSession: (id: string, pinned: boolean) => Promise<void>;
 }
 
 // rAF throttle state for partial updates (WS path)
@@ -144,7 +153,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       get().loadSessions();
     },
 
-    async sendMessage(text: string) {
+    async sendMessage(text: string, opts?: SendOptions) {
       let { activeSessionId } = get();
       if (!activeSessionId) {
         activeSessionId = await createSession();
@@ -155,7 +164,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       const userMsg: Message = { id: `local-${now}`, role: 'user', content: text, status: 'completed', createdAt: now };
       set((s) => ({ messages: [...s.messages, userMsg], status: 'running', turnStartedAt: now }));
       startPolling();
-      await sendPrompt(activeSessionId, text);
+      const llmNo = useSettingsStore.getState().selectedModelNo;
+      await sendPrompt(activeSessionId, text, llmNo, opts?.files, opts?.images);
     },
 
     async cancel() {
@@ -186,6 +196,33 @@ export const useChatStore = create<ChatState>((set, get) => {
         const sessions = await listSessions();
         set({ sessions });
       } catch {}
+    },
+
+    async deleteSession(id: string) {
+      const { activeSessionId } = get();
+      if (activeSessionId === id) {
+        set({ activeSessionId: null, messages: [], status: 'idle', turnStartedAt: null });
+      }
+      set((s) => ({ sessions: s.sessions.filter((ss) => ss.id !== id) }));
+      try { await apiDeleteSession(id); } catch {}
+    },
+
+    async renameSession(id: string, title: string) {
+      set((s) => ({
+        sessions: s.sessions.map((ss) =>
+          ss.id === id ? { ...ss, title, untitled: false } : ss,
+        ),
+      }));
+      try { await apiRenameSession(id, title); } catch {}
+    },
+
+    async pinSession(id: string, pinned: boolean) {
+      set((s) => ({
+        sessions: s.sessions.map((ss) =>
+          ss.id === id ? { ...ss, pinned } : ss,
+        ),
+      }));
+      try { await apiPinSession(id, pinned); } catch {}
     },
   };
 });

@@ -321,4 +321,9 @@ export const en: Record<string, string> = {
   'ask.banner': 'GA is waiting for your answer',
   'ask.replyHint': 'Reply in the input below',
   'ask.placeholderOpen': 'Type your answer here… (Enter to send)',
+  'session.rename': 'Rename',
+  'session.pin': 'Pin',
+  'session.unpin': 'Unpin',
+  'session.delete': 'Delete',
+  'session.deleteConfirm': 'Delete this session?',
 };

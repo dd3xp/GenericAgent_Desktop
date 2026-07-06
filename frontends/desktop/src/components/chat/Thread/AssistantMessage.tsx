@@ -17,15 +17,13 @@ export const AssistantMessage = memo(function AssistantMessage({ message, isStre
     return parseAgentContent(message.content);
   }, [message.content, message.turn_segs]);
 
-  if (isStreaming && segments.length === 0) return null;
-
   return (
     <div
       data-slot="aui_assistant-message-root"
       data-role="assistant"
       data-streaming={isStreaming || undefined}
     >
-      <MessageParts segments={segments} isStreaming={isStreaming} />
+      <MessageParts segments={segments} isStreaming={isStreaming} messageId={String(message.id)} />
     </div>
   );
 });

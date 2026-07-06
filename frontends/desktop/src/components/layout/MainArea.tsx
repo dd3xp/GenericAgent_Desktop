@@ -1,11 +1,11 @@
-import { useAppStore, type PageId } from '../../stores/app';
+import { useAppStore } from '../../stores/app';
 import { useI18n } from '../../i18n';
 import { ChatView } from '../chat/ChatView';
+import { ServicesPage } from '../services/ServicesPage';
+import { TokenPage } from '../token/TokenPage';
 
-const PAGE_PLACEHOLDERS: Record<Exclude<PageId, 'chat'>, { titleKey: string; subKey?: string }> = {
-  services: { titleKey: 'page.services.title', subKey: 'page.services.sub' },
+const PAGE_PLACEHOLDERS: Record<'collab', { titleKey: string; subKey?: string }> = {
   collab: { titleKey: 'page.collab.title', subKey: 'page.collab.sub' },
-  token: { titleKey: 'page.token.title', subKey: 'page.token.sub' },
 };
 
 export function MainArea() {
@@ -20,7 +20,25 @@ export function MainArea() {
     );
   }
 
-  const cfg = PAGE_PLACEHOLDERS[activePage];
+  if (activePage === 'services') {
+    return (
+      <div className="ga-main-area">
+        <ServicesPage />
+      </div>
+    );
+  }
+
+  if (activePage === 'token') {
+    return (
+      <div className="ga-main-area">
+        <TokenPage />
+      </div>
+    );
+  }
+
+  // Fallback for pages not yet migrated (collab)
+  const cfg = PAGE_PLACEHOLDERS[activePage as 'collab'];
+  if (!cfg) return <div className="ga-main-area" />;
 
   return (
     <div className="ga-main-area">

@@ -6,6 +6,37 @@
   flex-direction: column;
 }
 
+/* Titlebar controls — positioned after macOS traffic lights */
+.ga-titlebar-controls {
+  position: fixed;
+  top: var(--titlebar-inset-top, 7px);
+  left: var(--titlebar-inset-left, 12px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ga-titlebar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ui-text-tertiary);
+  cursor: pointer;
+  transition: color 0.1s, background 0.1s;
+  -webkit-app-region: no-drag;
+}
+
+.ga-titlebar-btn:hover {
+  background: var(--ui-control-hover-background);
+  color: var(--foreground);
+}
+
 .ga-app-body {
   flex: 1;
   min-height: 0;
@@ -14,6 +45,13 @@
 
 .ga-app-body .semi-resizable-group {
   height: 100%;
+}
+
+.ga-body-collapsed {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--semi-color-bg-1);
 }
 
 /* Sidebar */
@@ -28,7 +66,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 12px 0;
+  padding: 38px 0 12px;
 }
 
 .ga-sidebar-brand {
@@ -88,7 +126,7 @@
 
 .ga-nav-icon {
   flex-shrink: 0;
-  color: color-mix(in srgb, currentColor 85%, transparent);
+  color: var(--ui-icon-nav);
 }
 
 .ga-nav-btn:hover {
@@ -98,7 +136,7 @@
 }
 
 .ga-nav-btn:hover .ga-nav-icon {
-  color: color-mix(in srgb, currentColor 85%, transparent);
+  color: var(--ui-icon-nav-active);
 }
 
 .ga-nav-btn.active {
@@ -109,7 +147,7 @@
 }
 
 .ga-nav-btn.active .ga-nav-icon {
-  color: color-mix(in srgb, currentColor 85%, transparent);
+  color: var(--ui-icon-nav-active);
 }
 
 /* Sidebar Search */
@@ -123,7 +161,7 @@
   border-color: transparent;
   background: var(--ui-control-hover-background);
   height: 24px;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 
 .ga-sidebar-search .semi-input-wrapper:hover {
@@ -137,7 +175,7 @@
 }
 
 .ga-sidebar-search .semi-input {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 
 .ga-sidebar-search .semi-input-prefix {
@@ -184,8 +222,8 @@
 }
 
 .ga-session-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  position: relative;
+  display: flex;
   align-items: center;
   width: 100%;
   min-height: 26px;
@@ -212,6 +250,12 @@
   gap: 6px;
   padding: 2px 8px;
   min-width: 0;
+  flex: 1;
+  transition: padding-right 0.1s ease-out;
+}
+
+.ga-session-item:hover .ga-session-content {
+  padding-right: 48px;
 }
 
 .ga-status-dot {
@@ -260,15 +304,88 @@
 }
 
 .ga-session-age {
-  padding-right: 8px;
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 0.625rem;
   color: var(--ui-text-tertiary);
   opacity: 0;
   transition: opacity 0.15s;
+  pointer-events: none;
 }
 
 .ga-session-item:hover .ga-session-age {
   opacity: 1;
+}
+
+.ga-session-actions {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.ga-session-item:hover .ga-session-actions,
+.ga-session-actions.menu-open {
+  opacity: 1;
+}
+
+.ga-session-actions-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--ui-text-tertiary);
+  cursor: pointer;
+  transition: color 0.1s, background 0.1s;
+}
+
+.ga-session-actions-btn:hover {
+  background: var(--ui-control-active-background);
+  color: var(--foreground);
+}
+
+/* Inline rename input */
+.ga-session-rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--ui-accent);
+  border-radius: 4px;
+  background: var(--semi-color-bg-0);
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  font-family: inherit;
+  outline: none;
+}
+
+/* Pin icon for pinned sessions */
+.ga-session-pin-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  color: var(--ui-text-quaternary);
+  opacity: 1;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+
+.ga-session-item:hover .ga-session-pin-icon {
+  opacity: 0;
 }
 
 /* Section Header */

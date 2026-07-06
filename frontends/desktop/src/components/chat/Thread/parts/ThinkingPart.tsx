@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useCallback } from 'react';
+import { memo, useState, useRef, useCallback, useEffect } from 'react';
 
 interface Props {
   content: string;
@@ -6,14 +6,23 @@ interface Props {
 }
 
 export const ThinkingPart = memo(function ThinkingPart({ content, isStreaming }: Props) {
-  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const [userPinned, setUserPinned] = useState<boolean | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const isOpen = userOpen ?? isStreaming;
+  const isOpen = userPinned !== null ? userPinned : isStreaming;
 
   const handleToggle = useCallback(() => {
-    setUserOpen((prev) => (prev === null ? !isStreaming : !prev));
+    setUserPinned((prev) => {
+      if (prev === null) return !isStreaming;
+      return !prev;
+    });
   }, [isStreaming]);
+
+  useEffect(() => {
+    if (isStreaming && isOpen && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [content, isStreaming, isOpen]);
 
   if (!content.trim()) return null;
 
@@ -23,8 +32,14 @@ export const ThinkingPart = memo(function ThinkingPart({ content, isStreaming }:
       open={isOpen}
       onToggle={handleToggle}
     >
-      <summary data-slot="thinking-summary">Thinking</summary>
-      <div ref={bodyRef} data-slot="thinking-body">
+      <summary data-slot="thinking-summary">
+        <span className={isStreaming ? 'thinking-shimmer' : ''}>Thinking</span>
+      </summary>
+      <div
+        ref={bodyRef}
+        data-slot="thinking-body"
+        data-streaming={isStreaming || undefined}
+      >
         {content}
       </div>
     </details>

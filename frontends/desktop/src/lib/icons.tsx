@@ -12,7 +12,11 @@ const GLYPH_MAP: Record<string, string> = {
   'chevron-right': '',
   'settings-gear': '',
   'link': '',
+  'layout-sidebar-left': '',
+  'layout-sidebar-left-off': '',
   'circle-filled': '',
+  'pin': '\uEB2B',
+  'pinned': '\uEBA0',
 };
 
 export function Codicon({

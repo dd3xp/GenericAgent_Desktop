@@ -44,6 +44,8 @@
   --ui-text-secondary: hsl(0 0% 30%);
   --ui-text-tertiary: hsl(0 0% 48%);
   --ui-text-quaternary: hsl(0 0% 60%);
+  --ui-icon-nav: hsl(0 0% 24%);
+  --ui-icon-nav-active: hsl(0 0% 8%);
   --theme-primary: hsl(220 80% 50%);
 
   --ui-row-hover-background: hsl(0 0% 95%);
@@ -70,6 +72,8 @@
   --ui-text-secondary: hsl(0 0% 78%);
   --ui-text-tertiary: hsl(0 0% 60%);
   --ui-text-quaternary: hsl(0 0% 48%);
+  --ui-icon-nav: hsl(0 0% 72%);
+  --ui-icon-nav-active: hsl(0 0% 95%);
   --theme-primary: hsl(220 80% 68%);
 
   --ui-row-hover-background: hsl(0 0% 15%);

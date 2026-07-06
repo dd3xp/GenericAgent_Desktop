@@ -3,6 +3,7 @@ import type { Message } from '../../../services/chat';
 import { buildThreadGroups, computeVisibleRange, RENDER_BUDGET_INITIAL, RENDER_BUDGET_STEP } from '../../../lib/thread-grouping';
 import { useChatStore } from '../../../stores/chat';
 import { TurnPair } from './TurnPair';
+import { UserMessage } from './UserMessage';
 
 interface Props {
   messages: Message[];
@@ -68,6 +69,13 @@ export const MessageList = memo(function MessageList({ messages, isRunning }: Pr
               assistantMsg={group.assistantMsg}
               isStreaming={isRunning && isLast}
             />
+          );
+        }
+        if (group.msg.role === 'user') {
+          return (
+            <div key={group.msg.id} data-slot="aui_turn-pair">
+              <UserMessage content={group.msg.content} />
+            </div>
           );
         }
         return (
