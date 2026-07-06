@@ -1,0 +1,123 @@
+/* ─── User Turn Rail ─── */
+[data-slot="user-turn-rail"] {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  pointer-events: auto;
+}
+
+/* Mark column */
+[data-slot="rail-marks"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+[data-slot="rail-mark"] {
+  width: 2.5rem;
+  height: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+[data-slot="rail-mark-line"] {
+  width: 1rem;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--semi-color-fill-2);
+  transition: width 120ms ease, background-color 120ms ease;
+}
+
+[data-slot="user-turn-rail"][data-expanded] [data-slot="rail-mark-line"] {
+  background: var(--semi-color-text-2);
+}
+
+[data-slot="rail-mark"][data-active] [data-slot="rail-mark-line"] {
+  width: 1.5rem;
+  background: var(--semi-color-text-0);
+}
+
+/* Expanded panel — appears to the left of marks */
+[data-slot="rail-panel"] {
+  position: absolute;
+  right: 100%;
+  padding-right: 0.25rem; /* visual gap via padding so mouse doesn't leave nav */
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 260px;
+  min-width: 140px;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  padding-left: 0.25rem;
+  border-radius: 0.5rem;
+  background: var(--semi-color-bg-3, #2a2a2a);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  z-index: 31;
+  /* Hidden by default — shown via [data-expanded] */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+[data-slot="user-turn-rail"][data-expanded] [data-slot="rail-panel"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+[data-slot="rail-panel-item"] {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: none;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--semi-color-text-2);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+[data-slot="rail-panel-item"]:hover {
+  background: var(--semi-color-fill-1);
+}
+
+[data-slot="rail-panel-item"][data-active] {
+  color: var(--semi-color-text-0);
+  background: var(--semi-color-fill-0);
+}
+
+/* Focus ring */
+[data-slot="rail-mark"]:focus-visible [data-slot="rail-mark-line"] {
+  box-shadow: 0 0 0 2px var(--semi-color-primary-light-default, rgba(0, 100, 250, 0.2));
+}
+
+[data-slot="rail-mark"]:focus-visible {
+  outline: none;
+}
+
+/* Hide on narrow viewports where there's no gutter */
+@media (max-width: 900px) {
+  [data-slot="user-turn-rail"] {
+    display: none;
+  }
+}

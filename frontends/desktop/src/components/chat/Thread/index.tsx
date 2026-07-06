@@ -2,6 +2,7 @@ import { useChatStore } from '../../../stores/chat';
 import { useStickToBottom, useSessionScrollStability } from '../../../hooks/useStickToBottom';
 import { ThreadContent } from './ThreadContent';
 import { MessageList } from './MessageList';
+import { UserTurnRail } from './UserTurnRail';
 import './thread.css';
 
 export function Thread() {
@@ -22,6 +23,8 @@ export function Thread() {
           <div data-slot="aui_composer-clearance" />
         </ThreadContent>
       </div>
+
+      <UserTurnRail messages={messages} stopScroll={stopScroll} />
 
       {!isAtBottom && (
         <button data-slot="scroll-to-bottom" onClick={() => scrollToBottom('smooth')}>

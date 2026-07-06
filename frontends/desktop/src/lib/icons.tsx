@@ -17,6 +17,8 @@ const GLYPH_MAP: Record<string, string> = {
   'circle-filled': '',
   'pin': '\uEB2B',
   'pinned': '\uEBA0',
+  'edit': '\uEA73',
+  'trash': '\uEA81',
 };
 
 export function Codicon({

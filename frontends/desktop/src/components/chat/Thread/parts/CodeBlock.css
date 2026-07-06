@@ -66,8 +66,9 @@
 [data-slot="code-card-body"] code {
   font-family: inherit;
   font-size: inherit;
-  background: none;
+  background: none !important;
   padding: 0;
+  display: block;
 }
 
 /* ─── Streaming State ─── */

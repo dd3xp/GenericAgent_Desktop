@@ -1,8 +1,14 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { SendOptions } from '../../../stores/chat';
+import { RichEditorInput, type RichEditorHandle } from './RichEditorInput';
+import { CompletionDrawer } from './CompletionDrawer';
+import { AtRefPopover } from './AtRefPopover';
+import { ContextMenu } from './ContextMenu';
 import { ModelSelector } from './ModelSelector';
 import { AttachmentStrip, type AttachmentFile } from './AttachmentStrip';
 import { SkillPanel } from './SkillPanel';
+import { PrimaryCTA, computeCTAState } from './PrimaryCTA';
+import { StatusStack } from './StatusStack';
 import './composer.css';
 
 interface Props {
@@ -14,12 +20,15 @@ interface Props {
 let fileIdCounter = 0;
 
 export function Composer({ onSend, onStop, isGenerating }: Props) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<RichEditorHandle>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [value, setValue] = useState('');
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [plainText, setPlainText] = useState('');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  const [atQuery, setAtQuery] = useState<string | null>(null);
 
   useEffect(() => {
     const el = composerRef.current;
@@ -32,23 +41,18 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = '0';
-    el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
-  }, [value]);
-
   const processFiles = useCallback((fileList: FileList | File[]) => {
+    const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
     const newFiles: AttachmentFile[] = [];
     for (const file of Array.from(fileList)) {
       const id = `att-${++fileIdCounter}`;
       const isImage = file.type.startsWith('image/');
-      if (isImage) {
+      const tooLarge = file.size > MAX_SIZE;
+      if (isImage && !tooLarge) {
         const reader = new FileReader();
         reader.onload = (e) => {
           setAttachments((prev) =>
-            prev.map((a) => a.id === id ? { ...a, preview: e.target?.result as string } : a)
+            prev.map((a) => a.id === id ? { ...a, preview: e.target?.result as string, status: 'ready' as const } : a)
           );
         };
         reader.readAsDataURL(file);
@@ -58,6 +62,8 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
         name: file.name,
         size: file.size,
         type: isImage ? 'image' : 'file',
+        status: tooLarge ? 'error' : (isImage ? 'uploading' : 'ready'),
+        errorMsg: tooLarge ? 'File too large (max 50 MB)' : undefined,
         path: (file as File & { path?: string }).path || file.name,
       });
     }
@@ -65,7 +71,7 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
   }, []);
 
   const handleSend = useCallback(() => {
-    const text = value.trim();
+    const text = plainText.trim();
     if (!text && attachments.length === 0) return;
     const opts: SendOptions = {};
     const files = attachments.filter((a) => a.type === 'file');
@@ -77,13 +83,14 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
       opts.images = images.map((f) => ({ name: f.name, path: f.path || f.name, base64: f.preview }));
     }
     onSend(text || '', Object.keys(opts).length > 0 ? opts : undefined);
-    setValue('');
+    editorRef.current?.clear();
+    setPlainText('');
     setAttachments([]);
-  }, [value, attachments, onSend]);
+  }, [plainText, attachments, onSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
@@ -91,18 +98,79 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
     [handleSend],
   );
 
+  const handleEditorInput = useCallback((text: string) => {
+    setPlainText(text);
+  }, []);
+
+  const handleSlashTrigger = useCallback((query: string) => {
+    setSlashQuery(query);
+  }, []);
+
+  const handleSlashDismiss = useCallback(() => {
+    setSlashQuery(null);
+  }, []);
+
+  const handleCompletionSelect = useCallback((id: string, prompt: string) => {
+    editorRef.current?.setSkillChip(id, prompt);
+    editorRef.current?.focus();
+    setSlashQuery(null);
+  }, []);
+
+  const handleAtTrigger = useCallback((query: string) => {
+    setAtQuery(query);
+  }, []);
+
+  const handleAtDismiss = useCallback(() => {
+    setAtQuery(null);
+  }, []);
+
+  const handleAtConfirm = useCallback((kind: string, value: string) => {
+    // Remove the `@query` text from editor, then insert chip
+    const currentText = editorRef.current?.getText() || '';
+    const atIdx = currentText.lastIndexOf('@');
+    if (atIdx >= 0) {
+      editorRef.current?.setText(currentText.slice(0, atIdx));
+    }
+    editorRef.current?.insertChip(kind, value);
+    editorRef.current?.focus();
+    setAtQuery(null);
+  }, []);
+
+  const handlePasteFiles = useCallback((files: File[]) => {
+    processFiles(files);
+  }, [processFiles]);
+
   const handleRemoveAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  const handleSkillSelect = useCallback((prompt: string) => {
-    setValue(prompt);
-    textareaRef.current?.focus();
+  const handleSkillSelect = useCallback((id: string, prompt: string) => {
+    editorRef.current?.setSkillChip(id, prompt);
+    editorRef.current?.focus();
   }, []);
 
   const handleFileClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  const handleImageClick = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+
+  const handlePasteFromClipboard = useCallback(async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const file = new File([blob], 'clipboard-image.png', { type: imageType });
+          processFiles([file]);
+          return;
+        }
+      }
+    } catch { /* clipboard permission denied — silently ignore */ }
+  }, [processFiles]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -129,7 +197,8 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
     }
   }, [processFiles]);
 
-  const hasContent = value.trim().length > 0 || attachments.length > 0;
+  const hasContent = plainText.trim().length > 0 || attachments.length > 0;
+  const ctaState = computeCTAState(isGenerating, hasContent);
 
   return (
     <div
@@ -141,47 +210,46 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
     >
       {isDragOver && <div data-slot="composer-drop-overlay">Drop files here</div>}
       <div data-slot="composer-surface">
+        <StatusStack />
         <AttachmentStrip files={attachments} onRemove={handleRemoveAttachment} />
+        <CompletionDrawer
+          visible={slashQuery !== null}
+          query={slashQuery || ''}
+          onSelect={handleCompletionSelect}
+          onClose={handleSlashDismiss}
+        />
+        <AtRefPopover
+          visible={atQuery !== null}
+          query={atQuery || ''}
+          onConfirm={handleAtConfirm}
+          onClose={handleAtDismiss}
+        />
         <div data-slot="composer-input-row">
-          <textarea
-            ref={textareaRef}
-            data-slot="composer-input"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
+          <RichEditorInput
+            ref={editorRef}
             placeholder="Send a message…"
-            rows={1}
-            disabled={isGenerating}
+            disabled={false}
+            onInput={handleEditorInput}
+            onKeyDown={handleKeyDown}
+            onSlashTrigger={handleSlashTrigger}
+            onSlashDismiss={handleSlashDismiss}
+            onAtTrigger={handleAtTrigger}
+            onAtDismiss={handleAtDismiss}
+            onPasteFiles={handlePasteFiles}
           />
         </div>
         <div data-slot="composer-toolbar">
           <div data-slot="composer-toolbar-left">
-            <button
-              data-slot="composer-attach-btn"
-              onClick={handleFileClick}
-              aria-label="Attach file"
-              title="Upload file"
-            >
-              <PlusIcon />
-            </button>
+            <ContextMenu
+              onUploadFile={handleFileClick}
+              onUploadImage={handleImageClick}
+              onPasteImage={handlePasteFromClipboard}
+            />
             <SkillPanel onSelect={handleSkillSelect} />
           </div>
           <div data-slot="composer-toolbar-right">
             <ModelSelector />
-            {isGenerating ? (
-              <button data-slot="composer-stop-btn" onClick={onStop} aria-label="Stop generating">
-                <StopIcon />
-              </button>
-            ) : (
-              <button
-                data-slot="composer-send-btn"
-                onClick={handleSend}
-                disabled={!hasContent}
-                aria-label="Send message"
-              >
-                <SendIcon />
-              </button>
-            )}
+            <PrimaryCTA state={ctaState} onSend={handleSend} onStop={onStop} onQueue={handleSend} />
           </div>
         </div>
       </div>
@@ -192,30 +260,14 @@ export function Composer({ onSend, onStop, isGenerating }: Props) {
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
+      <input
+        ref={imageInputRef}
+        type="file"
+        multiple
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
     </div>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M8 14V2m0 0L3 7m5-5l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
   );
 }

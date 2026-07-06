@@ -1,17 +1,23 @@
 import { useCallback } from 'react';
 
+export type AttachmentStatus = 'uploading' | 'ready' | 'error';
+
 export interface AttachmentFile {
   id: string;
   name: string;
   size: number;
-  type: 'image' | 'file';
-  preview?: string; // data URL for images
+  type: 'image' | 'file' | 'url';
+  status: AttachmentStatus;
+  preview?: string;
   path?: string;
+  url?: string;
+  errorMsg?: string;
 }
 
 interface Props {
   files: AttachmentFile[];
   onRemove: (id: string) => void;
+  onRetry?: (id: string) => void;
 }
 
 const FILE_ICONS: Record<string, { char: string; color: string }> = {
@@ -43,11 +49,21 @@ function fmtSize(bytes: number): string {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-export function AttachmentStrip({ files, onRemove }: Props) {
+function hostname(url: string): string {
+  try { return new URL(url).hostname; }
+  catch { return url.slice(0, 30); }
+}
+
+export function AttachmentStrip({ files, onRemove, onRetry }: Props) {
   const handleRemove = useCallback((id: string) => (e: React.MouseEvent) => {
     e.stopPropagation();
     onRemove(id);
   }, [onRemove]);
+
+  const handleRetry = useCallback((id: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRetry?.(id);
+  }, [onRetry]);
 
   if (files.length === 0) return null;
 
@@ -56,21 +72,51 @@ export function AttachmentStrip({ files, onRemove }: Props) {
       {files.map((f) => {
         if (f.type === 'image' && f.preview) {
           return (
-            <div key={f.id} data-slot="attachment-thumb">
+            <div key={f.id} data-slot="attachment-thumb" data-status={f.status}>
               <img src={f.preview} alt={f.name} />
+              {f.status === 'uploading' && <span data-slot="attachment-spinner" />}
+              {f.status === 'error' && (
+                <button data-slot="attachment-error-badge" onClick={handleRetry(f.id)} title={f.errorMsg || 'Error'}>!</button>
+              )}
+              {f.status !== 'uploading' && (
+                <button data-slot="attachment-remove" onClick={handleRemove(f.id)} aria-label="Remove">×</button>
+              )}
+            </div>
+          );
+        }
+        if (f.type === 'url') {
+          return (
+            <div key={f.id} data-slot="attachment-file-chip" data-status={f.status}>
+              <span data-slot="attachment-file-icon">🔗</span>
+              <span data-slot="attachment-file-meta">
+                <span data-slot="attachment-file-name">{f.url ? hostname(f.url) : f.name}</span>
+              </span>
               <button data-slot="attachment-remove" onClick={handleRemove(f.id)} aria-label="Remove">×</button>
             </div>
           );
         }
         const icon = getFileIcon(f.name);
         return (
-          <div key={f.id} data-slot="attachment-file-chip">
-            <span data-slot="attachment-file-icon" style={{ color: icon.color }}>{icon.char}</span>
+          <div key={f.id} data-slot="attachment-file-chip" data-status={f.status}>
+            {f.status === 'uploading' ? (
+              <span data-slot="attachment-spinner" />
+            ) : f.status === 'error' ? (
+              <button data-slot="attachment-error-badge" onClick={handleRetry(f.id)} title={f.errorMsg || 'Error'}>!</button>
+            ) : (
+              <span data-slot="attachment-file-icon" style={{ color: icon.color }}>{icon.char}</span>
+            )}
             <span data-slot="attachment-file-meta">
               <span data-slot="attachment-file-name">{f.name}</span>
-              {f.size > 0 && <span data-slot="attachment-file-size">{fmtSize(f.size)}</span>}
+              {f.status === 'error' && f.errorMsg && (
+                <span data-slot="attachment-file-error">{f.errorMsg}</span>
+              )}
+              {f.status !== 'error' && f.size > 0 && (
+                <span data-slot="attachment-file-size">{fmtSize(f.size)}</span>
+              )}
             </span>
-            <button data-slot="attachment-remove" onClick={handleRemove(f.id)} aria-label="Remove">×</button>
+            {f.status !== 'uploading' && (
+              <button data-slot="attachment-remove" onClick={handleRemove(f.id)} aria-label="Remove">×</button>
+            )}
           </div>
         );
       })}

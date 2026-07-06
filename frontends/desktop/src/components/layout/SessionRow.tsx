@@ -92,15 +92,18 @@ export function SessionRow({
   }, [session.id, deleteSession, t]);
 
   const menu = (
-    <Dropdown.Menu>
+    <Dropdown.Menu className="ga-session-menu">
       <Dropdown.Item onClick={handleRenameStart}>
-        {t('session.rename')}
+        <Codicon name="edit" size="0.875rem" />
+        <span>{t('session.rename')}</span>
       </Dropdown.Item>
       <Dropdown.Item onClick={handlePin}>
-        {session.pinned ? t('session.unpin') : t('session.pin')}
+        <Codicon name="pin" size="0.875rem" />
+        <span>{session.pinned ? t('session.unpin') : t('session.pin')}</span>
       </Dropdown.Item>
       <Dropdown.Item type="danger" onClick={handleDelete}>
-        {t('session.delete')}
+        <Codicon name="trash" size="0.875rem" />
+        <span>{t('session.delete')}</span>
       </Dropdown.Item>
     </Dropdown.Menu>
   );

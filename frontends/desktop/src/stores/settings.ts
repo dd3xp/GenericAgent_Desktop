@@ -40,6 +40,7 @@ interface SettingsState {
   lang: 'zh' | 'en';
   modelProfiles: ModelProfile[];
   selectedModelNo: number;
+  liveModel: { isMixin: boolean; current: string } | null;
 
   open: () => void;
   close: () => void;
@@ -48,6 +49,7 @@ interface SettingsState {
   setLang: (lang: 'zh' | 'en') => void;
   setModelProfiles: (profiles: ModelProfile[]) => void;
   selectModel: (no: number) => void;
+  setLiveModel: (model: { isMixin: boolean; current: string } | null) => void;
   loadFromBridge: () => Promise<void>;
   persist: () => Promise<void>;
 }
@@ -65,6 +67,7 @@ function readInitialState() {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   visible: false,
   modelProfiles: [],
+  liveModel: null,
   ...readInitialState(),
 
   open: () => set({ visible: true }),
@@ -98,10 +101,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const profiles = get().modelProfiles;
     const profile = profiles[no];
     if (!profile) return;
-    set({ selectedModelNo: no });
+    set({ selectedModelNo: no, liveModel: null });
     legacy.selectModel(no, profile.name || profile.model);
     get().persist();
   },
+
+  setLiveModel: (model) => set({ liveModel: model }),
 
   loadFromBridge: async () => {
     try {

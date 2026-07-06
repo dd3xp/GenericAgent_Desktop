@@ -11,16 +11,23 @@ export interface SendOptions {
   images?: { name: string; path: string; base64?: string }[];
 }
 
+interface QueuedMessage {
+  text: string;
+  opts?: SendOptions;
+}
+
 interface ChatState {
   activeSessionId: string | null;
   messages: Message[];
   status: 'idle' | 'running';
   sessions: SessionInfo[];
   turnStartedAt: number | null;
+  pendingQueue: QueuedMessage[];
 
   newSession: () => Promise<void>;
   sendMessage: (text: string, opts?: SendOptions) => Promise<void>;
   cancel: () => Promise<void>;
+  cancelQueued: (index: number) => void;
   setActiveSession: (id: string | null) => void;
   loadSessions: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
@@ -79,6 +86,9 @@ export const useChatStore = create<ChatState>((set, get) => {
           status: result.status,
           turnStartedAt: result.status === 'running' ? s.turnStartedAt : null,
         }));
+        if (result.model) {
+          useSettingsStore.getState().setLiveModel(result.model);
+        }
         if (result.status !== 'running') stopPolling();
       }).catch(() => {});
     }, POLL_INTERVAL_MS);
@@ -130,6 +140,16 @@ export const useChatStore = create<ChatState>((set, get) => {
             ),
             status: result.status,
           }));
+          if (result.model) {
+            useSettingsStore.getState().setLiveModel(result.model);
+          }
+          // Drain queue: send next pending message
+          const { pendingQueue } = get();
+          if (pendingQueue.length > 0) {
+            const [next, ...rest] = pendingQueue;
+            set({ pendingQueue: rest });
+            get().sendMessage(next.text, next.opts);
+          }
         }).catch(() => {});
       }
     }
@@ -146,26 +166,37 @@ export const useChatStore = create<ChatState>((set, get) => {
     status: 'idle',
     sessions: [],
     turnStartedAt: null,
+    pendingQueue: [],
 
     async newSession() {
       const sessionId = await createSession();
-      set({ activeSessionId: sessionId, messages: [], status: 'idle', turnStartedAt: null });
+      set({ activeSessionId: sessionId, messages: [], status: 'idle', turnStartedAt: null, pendingQueue: [] });
       get().loadSessions();
     },
 
     async sendMessage(text: string, opts?: SendOptions) {
-      let { activeSessionId } = get();
+      let { activeSessionId, status } = get();
       if (!activeSessionId) {
         activeSessionId = await createSession();
         set({ activeSessionId });
         get().loadSessions();
       }
+      // If agent is running, enqueue instead of sending
+      if (status === 'running') {
+        set((s) => ({ pendingQueue: [...s.pendingQueue, { text, opts }] }));
+        return;
+      }
       const now = Date.now();
-      const userMsg: Message = { id: `local-${now}`, role: 'user', content: text, status: 'completed', createdAt: now };
+      const localImages = opts?.images?.map((f) => ({ name: f.name, path: f.path || f.name }));
+      const userMsg: Message = { id: `local-${now}`, role: 'user', content: text, status: 'completed', createdAt: now, images: localImages };
       set((s) => ({ messages: [...s.messages, userMsg], status: 'running', turnStartedAt: now }));
       startPolling();
       const llmNo = useSettingsStore.getState().selectedModelNo;
       await sendPrompt(activeSessionId, text, llmNo, opts?.files, opts?.images);
+    },
+
+    cancelQueued(index: number) {
+      set((s) => ({ pendingQueue: s.pendingQueue.filter((_, i) => i !== index) }));
     },
 
     async cancel() {
@@ -176,7 +207,7 @@ export const useChatStore = create<ChatState>((set, get) => {
 
     setActiveSession(id: string | null) {
       stopPolling();
-      set({ activeSessionId: id, messages: [], status: 'idle', turnStartedAt: null });
+      set({ activeSessionId: id, messages: [], status: 'idle', turnStartedAt: null, pendingQueue: [] });
       if (id) {
         pollMessages(id).then((result) => {
           set({

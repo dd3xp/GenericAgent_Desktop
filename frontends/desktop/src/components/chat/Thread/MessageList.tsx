@@ -74,7 +74,7 @@ export const MessageList = memo(function MessageList({ messages, isRunning }: Pr
         if (group.msg.role === 'user') {
           return (
             <div key={group.msg.id} data-slot="aui_turn-pair">
-              <UserMessage content={group.msg.content} />
+              <UserMessage content={group.msg.content} msgId={group.msg.id} images={group.msg.images} />
             </div>
           );
         }

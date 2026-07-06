@@ -10,6 +10,7 @@ export interface Message {
   createdAt?: number;
   ts?: number;
   turn_segs?: string[];
+  images?: { name: string; path: string }[];
 }
 
 export interface SessionInfo {
@@ -55,6 +56,9 @@ function normalizeMessage(msg: Record<string, unknown>, status: MessageStatus = 
   if (Array.isArray(msg.turn_segs)) {
     m.turn_segs = msg.turn_segs as string[];
   }
+  if (Array.isArray(msg.images) && msg.images.length > 0) {
+    m.images = msg.images as { name: string; path: string }[];
+  }
   return m;
 }
 
@@ -72,6 +76,17 @@ export async function createSession(): Promise<string> {
   });
   const data = await res.json();
   return data.sessionId;
+}
+
+async function uploadImage(sessionId: string, name: string, dataUrl: string): Promise<string> {
+  const res = await fetch(`${BRIDGE_BASE}/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, dataUrl, sid: sessionId }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'upload failed');
+  return data.path;
 }
 
 export async function sendPrompt(
@@ -108,7 +123,17 @@ export async function sendPrompt(
   }
 
   const filesMeta = (files || []).map((f) => ({ name: f.name, path: f.path, size: f.size }));
-  const imageMetas = (images || []).map((f) => ({ name: f.name, path: f.path, base64: f.base64 }));
+
+  // Upload images that only have base64 (pasted/dropped) to get file paths
+  const imageMetas: { name: string; path: string }[] = [];
+  for (const img of images || []) {
+    if (img.path && !img.path.startsWith('data:') && img.path !== img.name) {
+      imageMetas.push({ name: img.name, path: img.path });
+    } else if (img.base64) {
+      const path = await uploadImage(sessionId, img.name, img.base64);
+      imageMetas.push({ name: img.name, path });
+    }
+  }
 
   const res = await fetch(`${BRIDGE_BASE}/session/${sessionId}/prompt`, {
     method: 'POST',
