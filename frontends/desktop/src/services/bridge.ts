@@ -19,7 +19,8 @@ export interface ModelProfile {
   connect_timeout?: number;
   read_timeout?: number;
   kind?: 'mixin';
-  members?: number[];
+  members?: string[];
+  inMixin?: boolean;
 }
 
 interface GaApi {
@@ -32,22 +33,19 @@ interface GaApi {
   tauriInvoke: (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
-const MOCK_PROFILES: ModelProfile[] = [
-  { id: 1, name: 'DeepSeek Chat', model: 'deepseek-chat', apibase: 'https://api.deepseek.com/v1', protocol: 'oai', stream: true },
-  { id: 2, name: 'Claude Sonnet', model: 'claude-sonnet-4-20250514', apibase: 'https://api.anthropic.com/v1', protocol: 'claude', stream: true },
-];
+// ── Dev-mode HTTP fallback ──
+// When window.ga is not available (browser dev server without Tauri shell),
+// call the backend REST API directly.
+const DEV_BACKEND = 'http://localhost:14168';
 
-const MOCK_CONFIG: AppConfig = {
-  lang: (localStorage.getItem('ga_lang') as 'zh' | 'en') || 'zh',
-  theme: localStorage.getItem('ga_theme') || 'light',
-  appearance: (localStorage.getItem('ga_appearance') as 'light' | 'dark') || 'light',
-  plain: localStorage.getItem('ga_plain') === '1',
-  fontSize: parseInt(localStorage.getItem('ga_chatFontSize') || '14', 10),
-  llmNo: 0,
-};
-
-let mockProfiles = [...MOCK_PROFILES];
-let nextMockId = 100;
+async function devFetch(path: string, opts?: RequestInit): Promise<unknown> {
+  const res = await fetch(`${DEV_BACKEND}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
 
 function ga(): GaApi | null {
   const w = window as unknown as { ga?: GaApi };
@@ -55,93 +53,140 @@ function ga(): GaApi | null {
 }
 
 function isBridgeAvailable(): boolean {
-  const api = ga();
-  if (!api) return false;
-  return true;
+  return !!ga();
 }
 
 export async function getConfig(): Promise<AppConfig> {
-  if (!isBridgeAvailable()) return { ...MOCK_CONFIG };
+  if (isBridgeAvailable()) {
+    try {
+      const res = await ga()!.getConfig();
+      return res.config;
+    } catch { /* fall through */ }
+  }
   try {
-    const res = await ga()!.getConfig();
+    const res = await devFetch('/config') as { config: AppConfig };
     return res.config;
   } catch {
-    return { ...MOCK_CONFIG };
+    return {
+      lang: (localStorage.getItem('ga_lang') as 'zh' | 'en') || 'zh',
+      theme: 'light',
+      appearance: (localStorage.getItem('ga_appearance') as 'light' | 'dark') || 'light',
+      plain: false,
+      fontSize: parseInt(localStorage.getItem('ga_font_size') || '14', 10),
+      llmNo: 0,
+    };
   }
 }
 
 export async function saveConfig(config: Partial<AppConfig>): Promise<void> {
-  if (!isBridgeAvailable()) return;
+  if (isBridgeAvailable()) {
+    try { await ga()!.saveConfig({ config }); return; } catch { /* fall through */ }
+  }
   try {
-    await ga()!.saveConfig({ config });
+    await devFetch('/config', { method: 'POST', body: JSON.stringify({ config }) });
   } catch {}
 }
 
 export async function getModelProfiles(): Promise<ModelProfile[]> {
-  if (!isBridgeAvailable()) return [...mockProfiles];
+  if (isBridgeAvailable()) {
+    try {
+      const res = await ga()!.getModelProfiles();
+      return res.profiles || [];
+    } catch { /* fall through */ }
+  }
   try {
-    const res = await ga()!.getModelProfiles();
+    const res = await devFetch('/model-profiles') as { profiles: ModelProfile[] };
     return res.profiles || [];
   } catch {
-    return [...mockProfiles];
+    return [];
   }
 }
 
 export async function addModelProfile(data: Partial<ModelProfile>): Promise<ModelProfile[]> {
-  if (!isBridgeAvailable()) {
-    mockProfiles.push({ id: nextMockId++, name: '', model: '', apibase: '', protocol: 'oai', stream: true, ...data } as ModelProfile);
-    return [...mockProfiles];
+  if (isBridgeAvailable()) {
+    const res = await ga()!.rpc('model-profiles/add', data) as { profiles: ModelProfile[] };
+    return res.profiles;
   }
-  const res = await ga()!.rpc('model-profiles/add', data) as { profiles: ModelProfile[] };
+  const res = await devFetch('/model-profiles', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }) as { profiles: ModelProfile[] };
   return res.profiles;
 }
 
 export async function editModelProfile(id: number, data: Partial<ModelProfile>): Promise<ModelProfile[]> {
-  if (!isBridgeAvailable()) {
-    mockProfiles = mockProfiles.map((p) => p.id === id ? { ...p, ...data } : p);
-    return [...mockProfiles];
+  if (isBridgeAvailable()) {
+    const res = await ga()!.rpc('model-profiles/edit', { id, ...data }) as { profiles: ModelProfile[] };
+    return res.profiles;
   }
-  const res = await ga()!.rpc('model-profiles/edit', { id, ...data }) as { profiles: ModelProfile[] };
+  const res = await devFetch(`/model-profiles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }) as { profiles: ModelProfile[] };
   return res.profiles;
 }
 
 export async function deleteModelProfile(id: number): Promise<ModelProfile[]> {
-  if (!isBridgeAvailable()) {
-    mockProfiles = mockProfiles.filter((p) => p.id !== id);
-    return [...mockProfiles];
+  if (isBridgeAvailable()) {
+    const res = await ga()!.rpc('model-profiles/delete', { id }) as { profiles: ModelProfile[] };
+    return res.profiles;
   }
-  const res = await ga()!.rpc('model-profiles/delete', { id }) as { profiles: ModelProfile[] };
+  const res = await devFetch(`/model-profiles/${id}`, {
+    method: 'DELETE',
+  }) as { profiles: ModelProfile[] };
   return res.profiles;
 }
 
 export async function addToMixin(id: number): Promise<ModelProfile[]> {
-  if (!isBridgeAvailable()) return [...mockProfiles];
-  const res = await ga()!.rpc('model-profiles/mixin-add', { id }) as { profiles: ModelProfile[] };
+  if (isBridgeAvailable()) {
+    const res = await ga()!.rpc('model-profiles/mixin-add', { id }) as { profiles: ModelProfile[] };
+    return res.profiles;
+  }
+  const res = await devFetch(`/model-profiles/${id}/mixin`, {
+    method: 'POST',
+    body: '{}',
+  }) as { profiles: ModelProfile[] };
   return res.profiles;
 }
 
 export async function removeFromMixin(id: number): Promise<ModelProfile[]> {
-  if (!isBridgeAvailable()) return [...mockProfiles];
-  const res = await ga()!.rpc('model-profiles/mixin-remove', { id }) as { profiles: ModelProfile[] };
+  if (isBridgeAvailable()) {
+    const res = await ga()!.rpc('model-profiles/mixin-remove', { id }) as { profiles: ModelProfile[] };
+    return res.profiles;
+  }
+  const res = await devFetch(`/model-profiles/${id}/mixin`, {
+    method: 'DELETE',
+  }) as { profiles: ModelProfile[] };
+  return res.profiles;
+}
+
+export async function reorderMixin(members: string[]): Promise<ModelProfile[]> {
+  if (isBridgeAvailable()) {
+    const res = await ga()!.rpc('model-profiles/mixin-reorder', { members }) as { profiles: ModelProfile[] };
+    return res.profiles;
+  }
+  const res = await devFetch('/model-profiles/mixin/order', {
+    method: 'PUT',
+    body: JSON.stringify({ members }),
+  }) as { profiles: ModelProfile[] };
   return res.profiles;
 }
 
 export async function getMykeyContent(): Promise<string> {
-  if (!isBridgeAvailable()) return '# mock mykey content\npass\n';
-  try {
-    const res = await ga()!.getMykeyContent();
-    return res.content;
-  } catch {
-    return '';
+  if (isBridgeAvailable()) {
+    try {
+      const res = await ga()!.getMykeyContent();
+      return res.content;
+    } catch { return ''; }
   }
+  return '';
 }
 
 export async function saveMykeyContent(content: string): Promise<void> {
-  if (!isBridgeAvailable()) {
-    console.log('[mock] saveMykeyContent:', content.slice(0, 50));
+  if (isBridgeAvailable()) {
+    await ga()!.saveMykeyContent(content);
     return;
   }
-  await ga()!.saveMykeyContent(content);
 }
 
 export async function tauriInvoke(cmd: string, args: Record<string, unknown>): Promise<unknown> {

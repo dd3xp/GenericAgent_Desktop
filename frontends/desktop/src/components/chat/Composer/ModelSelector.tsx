@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSettingsStore } from '../../../stores/settings';
+import { useI18n } from '../../../i18n';
 import type { ModelProfile } from '../../../services/bridge';
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -14,39 +15,136 @@ const PROVIDER_COLORS: Record<string, string> = {
 };
 
 function providerColor(apibase: string): string {
-  const lower = apibase.toLowerCase();
+  const lower = (apibase || '').toLowerCase();
   for (const [key, color] of Object.entries(PROVIDER_COLORS)) {
     if (lower.includes(key)) return color;
   }
   return 'var(--semi-color-text-3, #8f959e)';
 }
 
+function providerName(apibase: string): string {
+  const lower = (apibase || '').toLowerCase();
+  if (lower.includes('deepseek')) return 'DEEPSEEK';
+  if (lower.includes('dashscope') || lower.includes('qwen')) return 'QWEN';
+  if (lower.includes('anthropic')) return 'ANTHROPIC';
+  if (lower.includes('openai')) return 'OPENAI';
+  if (lower.includes('openrouter')) return 'OPENROUTER';
+  if (lower.includes('google')) return 'GOOGLE';
+  if (lower.includes('moonshot')) return 'MOONSHOT';
+  return 'OTHER';
+}
+
+function profileLabel(name: string): string {
+  const s = String(name || '');
+  const i = s.indexOf('/');
+  return (i >= 0 ? s.slice(i + 1) : s).trim();
+}
+
 function modelShortName(profile: ModelProfile): string {
-  if (profile.name && profile.name.trim()) return profile.name.trim();
+  if (profile.name && profile.name.trim()) return profileLabel(profile.name);
   const m = profile.model || '';
   const slash = m.lastIndexOf('/');
   return slash >= 0 ? m.slice(slash + 1) : m;
 }
 
+interface GroupedProfiles {
+  provider: string;
+  color: string;
+  items: { profile: ModelProfile; idx: number }[];
+}
+
+function groupByProvider(profiles: ModelProfile[]): { groups: GroupedProfiles[]; mixins: { profile: ModelProfile; idx: number }[] } {
+  const mixins: { profile: ModelProfile; idx: number }[] = [];
+  const map = new Map<string, GroupedProfiles>();
+
+  profiles.forEach((p, idx) => {
+    if (p.kind === 'mixin') {
+      mixins.push({ profile: p, idx });
+      return;
+    }
+    const provider = providerName(p.apibase);
+    if (!map.has(provider)) {
+      map.set(provider, { provider, color: providerColor(p.apibase), items: [] });
+    }
+    map.get(provider)!.items.push({ profile: p, idx });
+  });
+
+  return { groups: Array.from(map.values()), mixins };
+}
+
 export function ModelSelector() {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const [expandedMixin, setExpandedMixin] = useState<number | null>(null);
+  const [isCompact, setIsCompact] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const { lang, t } = useI18n();
 
   const profiles = useSettingsStore((s) => s.modelProfiles);
   const selectedNo = useSettingsStore((s) => s.selectedModelNo);
   const selectModel = useSettingsStore((s) => s.selectModel);
 
+  const isLoading = profiles.length === 0;
   const currentProfile = profiles[selectedNo];
-  const chipLabel = currentProfile ? modelShortName(currentProfile) : 'Model';
 
-  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const chipLabel = useMemo(() => {
+    if (!currentProfile) return t('model.menuLabel');
+    if (currentProfile.kind === 'mixin') {
+      return t('model.aggregationShort');
+    }
+    return modelShortName(currentProfile);
+  }, [currentProfile, t]);
+
+  const { groups, mixins } = useMemo(() => groupByProvider(profiles), [profiles]);
+
+  const filteredGroups = useMemo(() => {
+    if (!search.trim()) return groups;
+    const q = search.toLowerCase();
+    return groups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter(
+          ({ profile: p }) =>
+            modelShortName(p).toLowerCase().includes(q) ||
+            (p.model || '').toLowerCase().includes(q) ||
+            g.provider.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [groups, search]);
+
+  const toggle = useCallback(() => {
+    setOpen((v) => {
+      if (!v) setSearch('');
+      return !v;
+    });
+  }, []);
 
   const handleSelect = useCallback((idx: number) => {
     selectModel(idx);
     setOpen(false);
   }, [selectModel]);
+
+  useEffect(() => {
+    if (open && searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, [open]);
+
+  // Compact mode: observe toolbar width
+  useEffect(() => {
+    const toolbar = wrapRef.current?.closest('[data-slot="composer-toolbar"]') as HTMLElement | null;
+    if (!toolbar) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width ?? toolbar.offsetWidth;
+      setIsCompact(width < 320);
+    });
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -82,80 +180,140 @@ export function ModelSelector() {
     return () => document.removeEventListener('keydown', onHotkey);
   }, [profiles, selectModel]);
 
-  if (profiles.length === 0) return null;
+  const handleOpenSettings = useCallback(() => {
+    setOpen(false);
+    useSettingsStore.getState().open();
+  }, []);
 
   return (
-    <div data-slot="model-selector">
+    <div ref={wrapRef} data-slot="model-selector">
       <button
         ref={btnRef}
         data-slot="model-chip"
+        data-loading={isLoading ? '' : undefined}
+        data-open={open ? '' : undefined}
         onClick={toggle}
-        title={currentProfile ? `${currentProfile.model}\n${currentProfile.apibase}` : ''}
+        title={currentProfile
+          ? currentProfile.kind === 'mixin'
+            ? t('model.aggregation')
+            : `${currentProfile.model}${currentProfile.apibase ? ' @ ' + currentProfile.apibase : ''}`
+          : t('model.menuLabel')}
       >
-        {currentProfile && (
-          <span
-            data-slot="provider-dot"
-            style={{ background: providerColor(currentProfile.apibase) }}
-          />
+        {isLoading ? (
+          <span data-slot="model-chip-spinner"><span /></span>
+        ) : (
+          <>
+            {!isCompact && <span data-slot="model-chip-label">{chipLabel}</span>}
+            <span data-slot="model-chip-caret" data-open={open ? '' : undefined}>
+              <CaretIcon />
+            </span>
+          </>
         )}
-        <span data-slot="model-chip-label">{chipLabel}</span>
-        <span data-slot="model-chip-caret" data-open={open ? '' : undefined}>
-          <CaretIcon />
-        </span>
       </button>
 
-      {open && (
+      {open && !isLoading && (
         <div ref={menuRef} data-slot="model-menu">
-          {profiles.map((p, idx) => {
-            if (p.kind === 'mixin') {
-              const isExpanded = expandedMixin === idx;
-              return (
-                <div key={p.id} data-slot="model-menu-group">
+          {/* Search */}
+          <div data-slot="model-menu-search">
+            <SearchIcon />
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder={t('model.menuLabel')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-slot="model-menu-search-input"
+            />
+          </div>
+
+          <div data-slot="model-menu-body">
+            {/* Provider groups */}
+            {filteredGroups.map((group) => (
+              <div key={group.provider} data-slot="model-menu-section">
+                <div data-slot="model-menu-section-header">
+                  <span data-slot="provider-dot" style={{ background: group.color }} />
+                  {group.provider}
+                </div>
+                {group.items.map(({ profile: p, idx }) => (
                   <button
+                    key={p.id}
                     data-slot="model-menu-item"
                     data-active={idx === selectedNo ? '' : undefined}
                     onClick={() => handleSelect(idx)}
+                    title={`${p.model}${p.apibase ? ' @ ' + p.apibase : ''}`}
                   >
-                    <span data-slot="provider-dot" style={{ background: providerColor(p.apibase || '') }} />
+                    {idx === selectedNo && <span data-slot="model-check">✓</span>}
                     <span data-slot="model-menu-name">{modelShortName(p)}</span>
-                    {p.members && p.members.length > 0 && (
-                      <span
-                        data-slot="mixin-caret"
-                        data-expanded={isExpanded ? '' : undefined}
-                        onClick={(e) => { e.stopPropagation(); setExpandedMixin(isExpanded ? null : idx); }}
-                      >
-                        <CaretIcon />
-                      </span>
-                    )}
                   </button>
-                  {isExpanded && p.members && (
-                    <div data-slot="mixin-members">
-                      {p.members.map((memberId) => {
-                        const member = profiles.find((pp) => pp.id === memberId);
-                        return member ? (
-                          <div key={memberId} data-slot="mixin-member">
-                            <span data-slot="provider-dot" style={{ background: providerColor(member.apibase) }} />
-                            {modelShortName(member)}
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  )}
+                ))}
+              </div>
+            ))}
+
+            {/* Mixin section */}
+            {mixins.length > 0 && (
+              <div data-slot="model-menu-section">
+                <div data-slot="model-menu-section-header">
+                  {t('model.aggregationShort').toUpperCase()}
                 </div>
-              );
-            }
-            return (
-              <button
-                key={p.id}
-                data-slot="model-menu-item"
-                data-active={idx === selectedNo ? '' : undefined}
-                onClick={() => handleSelect(idx)}
-              >
-                <span data-slot="provider-dot" style={{ background: providerColor(p.apibase) }} />
-                <span data-slot="model-menu-name">{modelShortName(p)}</span>
-              </button>
-            );
-          })}
+                {mixins.map(({ profile: p, idx }) => {
+                  const isExpanded = expandedMixin === idx;
+                  const label = p.name?.trim() || t('model.aggregationShort');
+                  return (
+                    <div key={p.id} data-slot="model-menu-group">
+                      <button
+                        data-slot="model-menu-item"
+                        data-active={idx === selectedNo ? '' : undefined}
+                        onClick={() => handleSelect(idx)}
+                        title={t('model.aggregationDesc')}
+                      >
+                        {idx === selectedNo && <span data-slot="model-check">✓</span>}
+                        <span data-slot="model-menu-name">{label}</span>
+                        {p.members && p.members.length > 0 && (
+                          <span
+                            data-slot="mixin-caret"
+                            data-expanded={isExpanded ? '' : undefined}
+                            onClick={(e) => { e.stopPropagation(); setExpandedMixin(isExpanded ? null : idx); }}
+                          >
+                            <CaretIcon />
+                          </span>
+                        )}
+                      </button>
+                      {isExpanded && p.members && (
+                        <div data-slot="mixin-members">
+                          {p.members.map((memberName) => {
+                            const member = profiles.find((pp) => pp.name === memberName);
+                            return (
+                              <div key={memberName} data-slot="mixin-member">
+                                <span data-slot="provider-dot" style={{ background: member ? providerColor(member.apibase) : 'var(--semi-color-text-3)' }} />
+                                {member ? modelShortName(member) : String(memberName)}
+                              </div>
+                            );
+                          })}
+                          {p.members.length === 0 && (
+                            <div data-slot="mixin-member" style={{ opacity: 0.5 }}>
+                              {t('model.emptyMixin')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {filteredGroups.length === 0 && mixins.length === 0 && (
+              <div data-slot="model-menu-empty">{t('set.noModels')}</div>
+            )}
+          </div>
+
+          {/* Footer actions */}
+          <div data-slot="model-menu-footer">
+            <button data-slot="model-menu-action" onClick={handleOpenSettings}>
+              {lang === 'zh' ? '编辑模型…' : 'Edit models…'}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -166,6 +324,14 @@ function CaretIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
       <path d="M2.5 3.5L5 6.5L7.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" data-slot="model-menu-search-icon">
+      <path d="M7 12A5 5 0 107 2a5 5 0 000 10zM14 14l-3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
