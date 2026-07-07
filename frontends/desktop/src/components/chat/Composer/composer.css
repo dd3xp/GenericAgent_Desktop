@@ -81,7 +81,7 @@
 
 [data-slot="composer-rich-input"]:empty::before {
   content: attr(data-placeholder);
-  color: var(--semi-color-text-2, #4e5969);
+  color: var(--ui-text-secondary);
   pointer-events: none;
 }
 

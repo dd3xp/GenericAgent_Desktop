@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSettingsStore } from '../../../stores/settings';
 import { useI18n } from '../../../i18n';
 import type { ModelProfile } from '../../../services/bridge';
-import { PROVIDER_PRESETS } from '../../../data/model-presets';
 import { getProviderIcon, providerFromModel } from '../../../data/provider-icons';
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -61,47 +60,31 @@ function modelShortName(profile: ModelProfile): string {
   return slash >= 0 ? m.slice(slash + 1) : m || profileLabel(profile.name);
 }
 
-function findPresetByApibase(apibase: string, model?: string) {
-  if (apibase) {
-    let host: string;
-    try { host = new URL(apibase).hostname.toLowerCase(); } catch { host = ''; }
-    if (host) {
-      const match = PROVIDER_PRESETS.find((p) => {
-        try { return host === new URL(p.apibase).hostname.toLowerCase(); } catch { return false; }
-      });
-      if (match) return match;
-    }
-  }
-  const key = providerFromModel(model || '');
-  if (key) return PROVIDER_PRESETS.find((p) => p.key === key);
-  return undefined;
-}
-
 function ProviderIcon({ apibase, model, size = 14 }: { apibase: string; model?: string; size?: number }) {
-  const preset = findPresetByApibase(apibase, model);
-  const providerKey = providerFromModel(model || '');
+  const providerKey = providerFromModel(model || '') || providerKeyFromApibase(apibase);
   const iconDef = providerKey ? getProviderIcon(providerKey) : undefined;
 
-  const icon = preset || iconDef;
-  if (!icon) {
-    return <span data-slot="provider-dot" style={{ background: providerColor(apibase, model) }} />;
+  if (iconDef?.Component) {
+    const Comp = iconDef.Component;
+    return <Comp size={size} />;
   }
-  return (
-    <svg
-      data-slot="provider-icon"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill={icon.color}
-      fillRule="evenodd"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {Array.isArray(icon.iconPath)
-        ? icon.iconPath.map((d, i) => <path key={i} d={d} />)
-        : <path d={icon.iconPath} />
-      }
-    </svg>
-  );
+  return <span data-slot="provider-dot" style={{ background: providerColor(apibase, model) }} />;
+}
+
+function providerKeyFromApibase(apibase: string): string | null {
+  const lower = (apibase || '').toLowerCase();
+  if (lower.includes('deepseek')) return 'deepseek';
+  if (lower.includes('dashscope') || lower.includes('qwen')) return 'qwen';
+  if (lower.includes('anthropic')) return 'anthropic';
+  if (lower.includes('openai')) return 'openai';
+  if (lower.includes('openrouter')) return 'openrouter';
+  if (lower.includes('google')) return 'google';
+  if (lower.includes('moonshot')) return 'moonshot';
+  if (lower.includes('volces') || lower.includes('volcengine')) return 'doubao';
+  if (lower.includes('minimax')) return 'minimax';
+  if (lower.includes('bigmodel') || lower.includes('zhipu')) return 'zhipu';
+  if (lower.includes('stepfun')) return 'stepfun';
+  return null;
 }
 
 interface GroupedProfiles {

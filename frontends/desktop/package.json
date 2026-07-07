@@ -12,6 +12,7 @@
   "dependencies": {
     "@douyinfe/semi-icons": "^2.71.1",
     "@douyinfe/semi-ui": "^2.71.1",
+    "@lobehub/icons": "^5.10.1",
     "@types/prismjs": "^1.26.6",
     "@vscode/codicons": "^0.0.45",
     "katex": "^0.17.0",

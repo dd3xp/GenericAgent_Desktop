@@ -9,23 +9,9 @@ import { getProviderIcon, providerFromModel } from '../../data/provider-icons';
 function ModelIcon({ model, size = 16 }: { model: string; size?: number }) {
   const key = providerFromModel(model);
   const def = key ? getProviderIcon(key) : undefined;
-  if (!def) return null;
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill={def.color}
-      fillRule="evenodd"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ flexShrink: 0 }}
-    >
-      {Array.isArray(def.iconPath)
-        ? def.iconPath.map((d, i) => <path key={i} d={d} />)
-        : <path d={def.iconPath} />
-      }
-    </svg>
-  );
+  if (!def?.Component) return null;
+  const Comp = def.Component;
+  return <Comp size={size} />;
 }
 
 function profileLabel(p: ModelProfile): string {
