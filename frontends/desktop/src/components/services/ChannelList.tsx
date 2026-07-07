@@ -7,41 +7,39 @@ import { showError, showSuccess } from '../../utils/toast';
 import { ChannelLogModal } from './ChannelLogModal';
 import { MykeyConfigModal } from './MykeyConfigModal';
 
-/** Map service IDs to display labels */
-const CHANNEL_LABELS: Record<string, string> = {
-  'frontends/qqapp.py': 'ch.qq',
-  'frontends/wechatapp.py': 'ch.wechat',
-  'frontends/wecomapp.py': 'ch.wecom',
-  'frontends/dingtalkapp.py': 'ch.dingtalk',
-  'frontends/tgapp.py': 'ch.telegram',
-  'frontends/dcapp.py': 'ch.discord',
-  'frontends/fsapp.py': 'ch.lark',
+import qqIcon from '../../assets/channels/qq.svg';
+import wechatIcon from '../../assets/channels/wechat.svg';
+import wecomIcon from '../../assets/channels/wecom.svg';
+import dingtalkIcon from '../../assets/channels/dingtalk.svg';
+import telegramIcon from '../../assets/channels/telegram.svg';
+import discordIcon from '../../assets/channels/discord.svg';
+import feishuIcon from '../../assets/channels/feishu.svg';
+
+interface ChannelMeta {
+  label: string;
+  icon: string;
+}
+
+/** Map service IDs to display labels and icons */
+const CHANNEL_META: Record<string, ChannelMeta> = {
+  'frontends/qqapp.py': { label: 'ch.qq', icon: qqIcon },
+  'frontends/wechatapp.py': { label: 'ch.wechat', icon: wechatIcon },
+  'frontends/wecomapp.py': { label: 'ch.wecom', icon: wecomIcon },
+  'frontends/dingtalkapp.py': { label: 'ch.dingtalk', icon: dingtalkIcon },
+  'frontends/tgapp.py': { label: 'ch.telegram', icon: telegramIcon },
+  'frontends/dcapp.py': { label: 'ch.discord', icon: discordIcon },
+  'frontends/fsapp.py': { label: 'ch.lark', icon: feishuIcon },
 };
+
+const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(CHANNEL_META).map(([k, v]) => [k, v.label]),
+);
 
 /** Only show IM channel processes in this tab */
 const CHANNEL_IDS = new Set(Object.keys(CHANNEL_LABELS));
 
 export function isChannelService(svc: ServiceInfo): boolean {
   return CHANNEL_IDS.has(svc.id) || CHANNEL_IDS.has(svc.name);
-}
-
-function StatusDot({ status }: { status: ServiceInfo['status'] }) {
-  const colorMap: Record<string, string> = {
-    running: 'green',
-    offline: 'grey',
-    error: 'red',
-  };
-  return (
-    <Tag
-      size="small"
-      color={colorMap[status] as 'green' | 'grey' | 'red'}
-      type="light"
-      shape="circle"
-      style={{ marginRight: 8 }}
-    >
-      {' '}
-    </Tag>
-  );
 }
 
 export function ChannelList() {
@@ -97,14 +95,22 @@ export function ChannelList() {
   return (
     <div className="ga-channel-list">
       {channels.map((svc) => {
-        const labelKey = CHANNEL_LABELS[svc.id] || CHANNEL_LABELS[svc.name] || '';
+        const meta = CHANNEL_META[svc.id] || CHANNEL_META[svc.name];
+        const labelKey = meta?.label || '';
         const label = labelKey ? t(labelKey) : svc.name;
+        const icon = meta?.icon;
         const busy = busyIds.has(svc.id);
 
         return (
           <div key={svc.id} className="ga-channel-card">
             <div className="ga-channel-card-info">
-              <StatusDot status={svc.status} />
+              {icon && (
+                <img
+                  src={icon}
+                  alt=""
+                  className="ga-channel-icon"
+                />
+              )}
               <span className="ga-channel-card-name">{label}</span>
               <Tag size="small" color={svc.running ? 'green' : 'grey'} type="ghost">
                 {svc.running ? t('st.online') : t('st.offline')}

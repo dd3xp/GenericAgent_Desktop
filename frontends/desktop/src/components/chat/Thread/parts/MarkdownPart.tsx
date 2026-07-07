@@ -8,6 +8,21 @@ import 'katex/dist/katex.min.css';
 import { CodeBlock } from './CodeBlock';
 import { useSmoothReveal } from '../../../../hooks/useSmoothReveal';
 
+const KATEX_OPTIONS = {
+  macros: {
+    '\\vline': '\\vert',
+    '\\R': '\\mathbb{R}',
+    '\\N': '\\mathbb{N}',
+    '\\Z': '\\mathbb{Z}',
+    '\\Q': '\\mathbb{Q}',
+    '\\C': '\\mathbb{C}',
+    '\\norm': '\\left\\lVert #1 \\right\\rVert',
+    '\\abs': '\\left\\lvert #1 \\right\\rvert',
+  },
+  strict: 'ignore' as const,
+  trust: true,
+};
+
 interface Props {
   content: string;
   isStreaming?: boolean;
@@ -53,7 +68,7 @@ export const MarkdownPart = memo(function MarkdownPart({ content, isStreaming = 
     <div data-slot="aui_markdown-part">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}
         components={components}
       >
         {normalizeLatexDelimiters(revealed)}

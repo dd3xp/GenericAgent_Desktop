@@ -38,7 +38,13 @@
 .ga-channel-card-info {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.ga-channel-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .ga-channel-card-name {

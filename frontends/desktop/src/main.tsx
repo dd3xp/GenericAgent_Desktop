@@ -1,5 +1,6 @@
 import '@semi-css';
 import './global.css';
+import './stores/bridgeActivity';
 
 if (document.documentElement.dataset.appearance === 'dark') {
   document.body.setAttribute('theme-mode', 'dark');

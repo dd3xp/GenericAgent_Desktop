@@ -65,6 +65,7 @@ export function SessionRow({
   }, []);
 
   const handleRenameKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       handleRenameConfirm();
@@ -111,7 +112,7 @@ export function SessionRow({
   return (
     <div
       className={`ga-session-item${isActive ? ' active' : ''}`}
-      onClick={renaming ? undefined : onClick}
+      onClick={renaming || menuOpen ? undefined : onClick}
     >
       <span className="ga-session-content">
         <span className={`ga-status-dot${isWorking ? ' working' : ''}`} />
@@ -140,7 +141,11 @@ export function SessionRow({
             </span>
           )}
           <span className="ga-session-age">{formatAge(session.updatedAt)}</span>
-          <span className={`ga-session-actions${menuOpen ? ' menu-open' : ''}`}>
+          <span
+            className={`ga-session-actions${menuOpen ? ' menu-open' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <Dropdown
               trigger="click"
               position="bottomRight"

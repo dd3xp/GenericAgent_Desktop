@@ -15,6 +15,8 @@ const GLYPH_MAP: Record<string, string> = {
   'layout-sidebar-left': '',
   'layout-sidebar-left-off': '',
   'circle-filled': '',
+  'layout-sidebar-right': '',
+  'layout-sidebar-right-off': '',
   'pin': '\uEB2B',
   'pinned': '\uEBA0',
   'edit': '\uEA73',

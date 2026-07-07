@@ -3,6 +3,7 @@ import { Modal, TextArea, Button, Spin } from '@douyinfe/semi-ui';
 import { useI18n } from '../../i18n';
 import { useServicesStore } from '../../stores/services';
 import { showError, showSuccess } from '../../utils/toast';
+import '../settings/settings.css';
 
 interface Props {
   visible: boolean;
@@ -46,9 +47,12 @@ export function MykeyConfigModal({ visible, onClose }: Props) {
       title={t('modal.mykeyConfig')}
       visible={visible}
       onCancel={onClose}
-      width={640}
+      width={870}
+      centered
+      closeOnEsc
+      className="ga-settings-dialog"
       footer={
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '8px 0' }}>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
           <Button type="primary" loading={saving} onClick={handleSave}>
             {t('common.save')}
@@ -64,7 +68,7 @@ export function MykeyConfigModal({ visible, onClose }: Props) {
         <TextArea
           value={draft}
           onChange={(v) => setDraft(v)}
-          autosize={{ minRows: 12, maxRows: 24 }}
+          autosize={{ minRows: 16, maxRows: 30 }}
           style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}
         />
       )}

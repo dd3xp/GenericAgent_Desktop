@@ -5,15 +5,19 @@ export type PageId = 'chat' | 'services' | 'collab' | 'token';
 interface AppState {
   activePage: PageId;
   sidebarCollapsed: boolean;
+  servicesTab: string;
   setPage: (page: PageId) => void;
+  setServicesTab: (tab: string) => void;
   toggleSidebar: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   activePage: 'chat',
   sidebarCollapsed: false,
+  servicesTab: 'channels',
 
   setPage: (page) => set({ activePage: page }),
+  setServicesTab: (tab) => set({ servicesTab: tab }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 }));
 

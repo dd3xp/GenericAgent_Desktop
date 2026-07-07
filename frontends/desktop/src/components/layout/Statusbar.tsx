@@ -1,6 +1,12 @@
-import type { ReactNode } from 'react';
+import { useState, useCallback, type ReactNode } from 'react';
 import { useChatStore } from '../../stores/chat';
+import { useConductorStore } from '../../stores/conductor';
+import { useServicesStore } from '../../stores/services';
+import { useTokenStore } from '../../stores/token';
+import { useBridgeStatus } from '../../hooks/useBridgeStatus';
 import { LiveDuration } from './LiveDuration';
+import { BridgeMenuPanel } from './BridgeMenuPanel';
+import { ConductorMenuPanel } from './ConductorMenuPanel';
 
 type Variant = 'action' | 'text' | 'menu' | 'link';
 
@@ -36,33 +42,27 @@ function StatusItem({ variant = 'text', icon, label, detail, disabled, onClick, 
   return <span className={cls}>{content}</span>;
 }
 
-export function Statusbar() {
-  const status = useChatStore((s) => s.status);
-  const turnStartedAt = useChatStore((s) => s.turnStartedAt);
+type DotStatus = 'ready' | 'connecting' | 'offline' | 'error' | 'degraded';
+
+function DotIcon({ status }: { status: DotStatus }) {
+  const colorMap: Record<DotStatus, string> = {
+    ready: 'var(--ui-accent)',
+    connecting: 'var(--semi-color-warning, #f59e0b)',
+    degraded: 'var(--semi-color-warning, #f59e0b)',
+    offline: 'var(--ui-text-quaternary)',
+    error: 'var(--ui-text-quaternary)',
+  };
+  const pulse = status === 'connecting';
 
   return (
-    <footer className="ga-statusbar">
-      <div className="ga-statusbar-group">
-        <StatusItem icon={<DotIcon connected />} label="Bridge" />
-      </div>
-      <div className="ga-statusbar-group">
-        {status === 'running' && turnStartedAt && (
-          <StatusItem
-            icon={<SpinnerIcon />}
-            label="Turn"
-            detail={<LiveDuration since={turnStartedAt} />}
-          />
-        )}
-        <StatusItem label="v0.1.0" />
-      </div>
-    </footer>
-  );
-}
-
-function DotIcon({ connected }: { connected: boolean }) {
-  return (
-    <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-      <circle cx="4" cy="4" r="3" fill={connected ? 'var(--ui-accent)' : 'var(--ui-text-quaternary)'} />
+    <svg
+      width="8"
+      height="8"
+      viewBox="0 0 8 8"
+      fill="none"
+      className={pulse ? 'ga-statusbar-dot--pulse' : undefined}
+    >
+      <circle cx="4" cy="4" r="3" fill={colorMap[status]} />
     </svg>
   );
 }
@@ -72,5 +72,100 @@ function SpinnerIcon() {
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="ga-statusbar-spinner">
       <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="28 10" strokeLinecap="round" />
     </svg>
+  );
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+export function Statusbar() {
+  const chatStatus = useChatStore((s) => s.status);
+  const turnStartedAt = useChatStore((s) => s.turnStartedAt);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [conductorPanelOpen, setConductorPanelOpen] = useState(false);
+
+  const bridgeStatus = useBridgeStatus();
+  const services = useServicesStore((s) => s.services);
+  const conductorStatus = useConductorStore((s) => s.connectionStatus);
+  const snapshot = useTokenStore((s) => s.snapshot);
+  const conductorSnapshot = useTokenStore((s) => s.conductorSnapshot);
+
+  const togglePanel = useCallback(() => { setPanelOpen((v) => !v); setConductorPanelOpen(false); }, []);
+  const closePanel = useCallback(() => setPanelOpen(false), []);
+  const toggleConductorPanel = useCallback(() => { setConductorPanelOpen((v) => !v); setPanelOpen(false); }, []);
+  const closeConductorPanel = useCallback(() => setConductorPanelOpen(false), []);
+
+  const conductorService = services.find((s) => s.id === 'frontends/conductor.py');
+  const bridgeServices = services.filter((s) => s.id !== 'frontends/conductor.py');
+
+  // Derive bridge dot status: if WS is ready, check bridge-managed service errors only.
+  const erroredBridgeServices = bridgeServices.filter((s) => s.status === 'error');
+  const erroredBridgeCount = erroredBridgeServices.length;
+  const bridgeDot: DotStatus = bridgeStatus === 'ready'
+    ? (erroredBridgeCount > 0 ? 'degraded' : 'ready')
+    : bridgeStatus;
+
+  const bridgeDetail = bridgeStatus === 'ready'
+    ? (erroredBridgeCount > 0
+      ? `${erroredBridgeCount}/${bridgeServices.length} err: ${(erroredBridgeServices[0]?.name ?? erroredBridgeServices[0]?.id ?? 'service').split('/').pop()}`
+      : undefined)
+    : (bridgeStatus === 'connecting' ? 'connecting' : 'offline');
+
+  // Conductor dot/detail: prioritize conductor service process error over WS state.
+  const conductorDot: DotStatus = conductorService?.status === 'error' ? 'error'
+    : conductorStatus === 'ready' ? 'ready'
+    : conductorStatus === 'error' ? 'error'
+    : conductorStatus === 'connecting' ? 'connecting'
+    : 'offline';
+
+  const conductorDetail = conductorService?.status === 'error'
+    ? (conductorService.lastError || 'service error')
+    : conductorStatus === 'ready' ? undefined : conductorStatus;
+
+  // Total tokens (bridge + conductor)
+  const totalTokens = snapshot.totalInput + snapshot.totalOutput
+    + conductorSnapshot.totalInput + conductorSnapshot.totalOutput;
+
+  return (
+    <footer className="ga-statusbar">
+      <div className="ga-statusbar-group">
+        <div className="ga-statusbar-menu-anchor">
+          <StatusItem
+            variant="menu"
+            icon={<DotIcon status={bridgeDot} />}
+            label="Bridge"
+            detail={bridgeDetail}
+            onClick={togglePanel}
+          />
+          {panelOpen && <BridgeMenuPanel onClose={closePanel} />}
+        </div>
+        <div className="ga-statusbar-menu-anchor">
+          <StatusItem
+            variant="menu"
+            icon={<DotIcon status={conductorDot} />}
+            label="Conductor"
+            detail={conductorDetail}
+            onClick={toggleConductorPanel}
+          />
+          {conductorPanelOpen && <ConductorMenuPanel onClose={closeConductorPanel} />}
+        </div>
+      </div>
+      <div className="ga-statusbar-group">
+        {chatStatus === 'running' && turnStartedAt && (
+          <StatusItem
+            icon={<SpinnerIcon />}
+            label="Turn"
+            detail={<LiveDuration since={turnStartedAt} />}
+          />
+        )}
+        {totalTokens > 0 && (
+          <StatusItem label={formatTokens(totalTokens)} detail="tokens" />
+        )}
+        <StatusItem label="v0.1.0" />
+      </div>
+    </footer>
   );
 }
