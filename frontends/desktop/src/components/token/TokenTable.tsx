@@ -3,12 +3,7 @@ import { Table, Tag, Empty } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { useI18n } from '../../i18n';
 import { useTokenStore, type HistoryEntry } from '../../stores/token';
-
-function formatTokenCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+import { formatTokenCount } from '../../utils/format';
 
 interface Props {
   /** If provided, renders this data instead of the store's chat history */

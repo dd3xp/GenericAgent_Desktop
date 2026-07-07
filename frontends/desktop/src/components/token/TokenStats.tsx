@@ -1,17 +1,26 @@
 import { useMemo } from 'react';
 import { useI18n } from '../../i18n';
-import { useTokenStore } from '../../stores/token';
+import { useTokenStore, type TokenSnapshot, type HistoryEntry } from '../../stores/token';
+import { formatNumber } from '../../utils/format';
 
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+export interface StatCard {
+  labelKey: string;
+  value: string;
 }
 
-export function TokenStats() {
+interface Props {
+  snapshot?: TokenSnapshot;
+  history?: HistoryEntry[];
+  cards?: StatCard[];
+}
+
+export function TokenStats({ snapshot: snapshotProp, history: historyProp, cards }: Props) {
   const { t } = useI18n();
-  const snapshot = useTokenStore((s) => s.snapshot);
-  const history = useTokenStore((s) => s.history);
+  const storeSnapshot = useTokenStore((s) => s.snapshot);
+  const storeHistory = useTokenStore((s) => s.history);
+
+  const snapshot = snapshotProp ?? storeSnapshot;
+  const history = historyProp ?? storeHistory;
 
   const todayTokens = useMemo(() => {
     const today = new Date();
@@ -29,20 +38,22 @@ export function TokenStats() {
       ? ((snapshot.totalCacheRead / (totalTokens + totalCache)) * 100).toFixed(1)
       : '0';
 
+  const defaultCards: StatCard[] = [
+    { labelKey: 'tok.total', value: formatNumber(totalTokens) },
+    { labelKey: 'tok.cost', value: `${cacheRate}%` },
+    { labelKey: 'tok.today', value: formatNumber(todayTokens) },
+  ];
+
+  const displayCards = cards ?? defaultCards;
+
   return (
     <div className="ga-token-stats">
-      <div className="ga-token-stat-card">
-        <div className="ga-token-stat-label">{t('tok.total')}</div>
-        <div className="ga-token-stat-value">{formatNumber(totalTokens)}</div>
-      </div>
-      <div className="ga-token-stat-card">
-        <div className="ga-token-stat-label">{t('tok.today')}</div>
-        <div className="ga-token-stat-value">{formatNumber(todayTokens)}</div>
-      </div>
-      <div className="ga-token-stat-card">
-        <div className="ga-token-stat-label">{t('tok.cost')}</div>
-        <div className="ga-token-stat-value">{cacheRate}%</div>
-      </div>
+      {displayCards.map((card) => (
+        <div key={card.labelKey} className="ga-token-stat-card">
+          <div className="ga-token-stat-label">{t(card.labelKey)}</div>
+          <div className="ga-token-stat-value">{card.value}</div>
+        </div>
+      ))}
     </div>
   );
 }

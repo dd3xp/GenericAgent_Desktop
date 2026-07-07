@@ -7,21 +7,21 @@ import { showError, showSuccess } from '../../utils/toast';
 import { ChannelLogModal } from './ChannelLogModal';
 import { MykeyConfigModal } from './MykeyConfigModal';
 
-/** Map service script IDs to display labels */
+/** Map service IDs to display labels */
 const CHANNEL_LABELS: Record<string, string> = {
-  'qqapp.py': 'ch.qq',
-  'wechatapp.py': 'ch.wechat',
-  'wecomapp.py': 'ch.wecom',
-  'dingtalkapp.py': 'ch.dingtalk',
-  'tgapp.py': 'ch.telegram',
-  'dcapp.py': 'ch.discord',
-  'fsapp.py': 'ch.lark',
+  'frontends/qqapp.py': 'ch.qq',
+  'frontends/wechatapp.py': 'ch.wechat',
+  'frontends/wecomapp.py': 'ch.wecom',
+  'frontends/dingtalkapp.py': 'ch.dingtalk',
+  'frontends/tgapp.py': 'ch.telegram',
+  'frontends/dcapp.py': 'ch.discord',
+  'frontends/fsapp.py': 'ch.lark',
 };
 
 /** Only show IM channel processes in this tab */
 const CHANNEL_IDS = new Set(Object.keys(CHANNEL_LABELS));
 
-function isChannelService(svc: ServiceInfo): boolean {
+export function isChannelService(svc: ServiceInfo): boolean {
   return CHANNEL_IDS.has(svc.id) || CHANNEL_IDS.has(svc.name);
 }
 

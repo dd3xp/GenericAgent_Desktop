@@ -1,3 +1,5 @@
+import { BRIDGE_BASE } from './constants';
+
 export interface AppConfig {
   lang: 'zh' | 'en';
   theme: string;
@@ -36,7 +38,7 @@ interface GaApi {
 // ── Dev-mode HTTP fallback ──
 // When window.ga is not available (browser dev server without Tauri shell),
 // call the backend REST API directly.
-const DEV_BACKEND = 'http://localhost:14168';
+const DEV_BACKEND = BRIDGE_BASE;
 
 async function devFetch(path: string, opts?: RequestInit): Promise<unknown> {
   const res = await fetch(`${DEV_BACKEND}${path}`, {

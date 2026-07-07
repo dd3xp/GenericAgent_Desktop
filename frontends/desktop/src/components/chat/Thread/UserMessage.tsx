@@ -1,7 +1,6 @@
 import { memo, useRef, useState, useLayoutEffect } from 'react';
 import { matchSkillPrefix } from '../Composer/skills';
-
-const BRIDGE_BASE = 'http://127.0.0.1:14168';
+import { BRIDGE_BASE } from '../../../services/constants';
 
 interface Props {
   content: string;

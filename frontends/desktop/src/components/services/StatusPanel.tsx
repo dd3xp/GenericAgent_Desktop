@@ -5,11 +5,12 @@ import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { useI18n } from '../../i18n';
 import { useServicesStore, type ServiceInfo } from '../../stores/services';
 import { showError, showSuccess } from '../../utils/toast';
+import { isChannelService } from './ChannelList';
 import { ChannelLogModal } from './ChannelLogModal';
 
 export function StatusPanel() {
   const { t } = useI18n();
-  const services = useServicesStore((s) => s.services);
+  const allServices = useServicesStore((s) => s.services);
   const loading = useServicesStore((s) => s.loading);
   const startService = useServicesStore((s) => s.startService);
   const stopService = useServicesStore((s) => s.stopService);
@@ -17,6 +18,8 @@ export function StatusPanel() {
 
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [logTarget, setLogTarget] = useState<string | null>(null);
+
+  const services = allServices.filter((svc) => !isChannelService(svc));
 
   const withBusy = useCallback(
     async (id: string, action: () => Promise<boolean>) => {

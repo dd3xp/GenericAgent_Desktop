@@ -1,19 +1,16 @@
 import { create } from 'zustand';
 import { subscribe } from '../services/ws';
+import {
+  fetchServicesPanel,
+  startServiceById,
+  stopServiceById,
+  fetchServiceLogs,
+  fetchMykeyContent,
+  saveMykeyContent,
+  type ServiceInfo,
+} from '../services/services-api';
 
-const BRIDGE_BASE = 'http://127.0.0.1:14168';
-
-export interface ServiceInfo {
-  id: string;
-  name: string;
-  status: 'running' | 'offline' | 'error';
-  running: boolean;
-  pid: number | null;
-  memMb: number | null;
-  cpuPct: number | null;
-  managed: boolean;
-  lastError: string | null;
-}
+export type { ServiceInfo };
 
 interface ServicesState {
   services: ServiceInfo[];
@@ -32,7 +29,6 @@ interface ServicesState {
 }
 
 export const useServicesStore = create<ServicesState>((set, get) => {
-  // Subscribe to WS events for real-time updates
   subscribe('services.snapshot', (data: unknown) => {
     const evt = data as { services?: ServiceInfo[] };
     if (evt.services) {
@@ -61,10 +57,8 @@ export const useServicesStore = create<ServicesState>((set, get) => {
     async fetchServices() {
       set({ loading: true, error: null });
       try {
-        const res = await fetch(`${BRIDGE_BASE}/services/panel`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        set({ services: data.services ?? [], loading: false });
+        const services = await fetchServicesPanel();
+        set({ services, loading: false });
       } catch (e) {
         set({ loading: false, error: (e as Error).message });
       }
@@ -72,21 +66,15 @@ export const useServicesStore = create<ServicesState>((set, get) => {
 
     async startService(id: string) {
       try {
-        const res = await fetch(`${BRIDGE_BASE}/services/start`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (data.service) {
+        const { ok, service } = await startServiceById(id);
+        if (service) {
           set((s) => ({
             services: s.services.map((svc) =>
-              svc.id === data.service.id ? data.service : svc,
+              svc.id === service.id ? service : svc,
             ),
           }));
         }
-        return data.ok ?? true;
+        return ok;
       } catch {
         return false;
       }
@@ -94,21 +82,15 @@ export const useServicesStore = create<ServicesState>((set, get) => {
 
     async stopService(id: string) {
       try {
-        const res = await fetch(`${BRIDGE_BASE}/services/stop`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (data.service) {
+        const { ok, service } = await stopServiceById(id);
+        if (service) {
           set((s) => ({
             services: s.services.map((svc) =>
-              svc.id === data.service.id ? data.service : svc,
+              svc.id === service.id ? service : svc,
             ),
           }));
         }
-        return data.ok ?? true;
+        return ok;
       } catch {
         return false;
       }
@@ -117,19 +99,13 @@ export const useServicesStore = create<ServicesState>((set, get) => {
     async restartService(id: string) {
       const stopped = await get().stopService(id);
       if (!stopped) return false;
-      // Brief delay to allow the process to fully stop
       await new Promise((r) => setTimeout(r, 500));
       return get().startService(id);
     },
 
     async fetchLogs(id: string, tail = 200) {
       try {
-        const res = await fetch(
-          `${BRIDGE_BASE}/services/logs?id=${encodeURIComponent(id)}&tail=${tail}`,
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        return data.lines ?? [];
+        return await fetchServiceLogs(id, tail);
       } catch {
         return [];
       }
@@ -138,10 +114,8 @@ export const useServicesStore = create<ServicesState>((set, get) => {
     async fetchMykey() {
       set({ mykeyLoading: true });
       try {
-        const res = await fetch(`${BRIDGE_BASE}/services/mykey`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        set({ mykeyContent: data.content ?? '', mykeyLoading: false });
+        const content = await fetchMykeyContent();
+        set({ mykeyContent: content, mykeyLoading: false });
       } catch {
         set({ mykeyLoading: false });
       }
@@ -149,17 +123,9 @@ export const useServicesStore = create<ServicesState>((set, get) => {
 
     async saveMykey(content: string) {
       try {
-        const res = await fetch(`${BRIDGE_BASE}/services/mykey`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (data.ok) {
-          set({ mykeyContent: content });
-        }
-        return data.ok ?? false;
+        const ok = await saveMykeyContent(content);
+        if (ok) set({ mykeyContent: content });
+        return ok;
       } catch {
         return false;
       }

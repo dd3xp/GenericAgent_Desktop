@@ -552,6 +552,12 @@
   align-items: stretch;
 }
 
+.ga-main-area.ga-main-full {
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
 .ga-main-placeholder {
   text-align: center;
   color: var(--semi-color-text-2);
@@ -674,4 +680,13 @@
 
 @keyframes ga-spin {
   to { transform: rotate(360deg); }
+}
+
+.ga-statusbar-dot--pulse {
+  animation: ga-dot-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ga-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }

@@ -11,10 +11,14 @@ import './token.css';
 export function TokenPage() {
   const { t } = useI18n();
   const fetchHistory = useTokenStore((s) => s.fetchHistory);
+  const startPolling = useTokenStore((s) => s.startPolling);
+  const stopPolling = useTokenStore((s) => s.stopPolling);
 
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+    startPolling();
+    return () => stopPolling();
+  }, [fetchHistory, startPolling, stopPolling]);
 
   return (
     <div className="ga-token-page">

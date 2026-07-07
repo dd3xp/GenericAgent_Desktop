@@ -1,4 +1,4 @@
-const BRIDGE_BASE = 'http://127.0.0.1:14168';
+import { BRIDGE_BASE } from './constants';
 
 export type MessageStatus = 'completed' | 'in_progress' | 'failed';
 

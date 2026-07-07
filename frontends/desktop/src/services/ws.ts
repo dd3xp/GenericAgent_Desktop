@@ -1,6 +1,7 @@
 type WsHandler = (payload: unknown) => void;
+export type BridgeStatus = 'ready' | 'connecting' | 'offline';
 
-const WS_URL = 'ws://127.0.0.1:14168/ws';
+import { WS_URL } from './constants';
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
@@ -9,8 +10,28 @@ let reconnectAttempt = 0;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Map<string, Set<WsHandler>>();
 
+let currentStatus: BridgeStatus = 'offline';
+const statusListeners = new Set<(s: BridgeStatus) => void>();
+
+function setStatus(s: BridgeStatus) {
+  if (s === currentStatus) return;
+  currentStatus = s;
+  statusListeners.forEach((fn) => fn(s));
+}
+
+export function getBridgeStatus(): BridgeStatus {
+  return currentStatus;
+}
+
+export function onBridgeStatusChange(fn: (s: BridgeStatus) => void): () => void {
+  statusListeners.add(fn);
+  return () => { statusListeners.delete(fn); };
+}
+
 function connect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  setStatus('connecting');
 
   try {
     ws = new WebSocket(WS_URL);
@@ -21,6 +42,7 @@ function connect() {
 
   ws.onopen = () => {
     reconnectAttempt = 0;
+    setStatus('ready');
   };
 
   ws.onmessage = (ev) => {
@@ -37,6 +59,7 @@ function connect() {
 
   ws.onclose = () => {
     ws = null;
+    setStatus('connecting');
     scheduleReconnect();
   };
 
