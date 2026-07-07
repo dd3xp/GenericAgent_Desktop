@@ -153,6 +153,46 @@
   object-fit: cover;
 }
 
+[data-slot="user-files"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  margin-bottom: 0.375rem;
+}
+
+[data-slot="user-file-chip"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--ui-bg-secondary, hsl(0 0% 95%));
+  border: 1px solid var(--ui-stroke-tertiary, hsl(0 0% 88%));
+  font-size: var(--conversation-caption-font-size);
+  line-height: var(--conversation-caption-line-height);
+  color: var(--ui-text-secondary, hsl(0 0% 40%));
+  max-width: 14rem;
+}
+
+[data-slot="user-file-icon"] {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+[data-slot="user-file-name"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-slot="user-file-size"] {
+  flex-shrink: 0;
+  opacity: 0.6;
+  font-size: 0.625rem;
+}
+
 /* ─── Assistant Message ─── */
 [data-slot="aui_assistant-message-root"] {
   display: flex;

@@ -11,6 +11,7 @@ export interface Message {
   ts?: number;
   turn_segs?: string[];
   images?: { name: string; path: string }[];
+  files?: { name: string; path: string; size?: number }[];
 }
 
 export interface SessionInfo {
@@ -59,6 +60,9 @@ function normalizeMessage(msg: Record<string, unknown>, status: MessageStatus = 
   if (Array.isArray(msg.images) && msg.images.length > 0) {
     m.images = msg.images as { name: string; path: string }[];
   }
+  if (Array.isArray(msg.files) && msg.files.length > 0) {
+    m.files = msg.files as { name: string; path: string; size?: number }[];
+  }
   return m;
 }
 
@@ -83,6 +87,17 @@ async function uploadImage(sessionId: string, name: string, dataUrl: string): Pr
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, dataUrl, sid: sessionId }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'upload failed');
+  return data.path;
+}
+
+export async function uploadFile(name: string, dataUrl: string): Promise<string> {
+  const res = await fetch(`${BRIDGE_BASE}/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, dataUrl, sid: '_files' }),
   });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'upload failed');
@@ -193,7 +208,9 @@ export async function listSessions(): Promise<SessionInfo[]> {
   }
   const res = await fetch(`${BRIDGE_BASE}/sessions`);
   const data = await res.json();
-  return data.sessions || [];
+  const all: SessionInfo[] = data.sessions || [];
+  // Filter out conductor worker sessions (tui_ prefix = internal dispatch)
+  return all.filter((s) => !s.id.startsWith('tui_'));
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

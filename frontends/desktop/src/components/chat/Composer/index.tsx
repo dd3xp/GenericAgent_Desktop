@@ -60,13 +60,36 @@ export function Composer({ onSend, onStop, isGenerating, editorRef: externalEdit
           );
         };
         reader.readAsDataURL(file);
+      } else if (!isImage && !tooLarge) {
+        // Upload file to bridge to get absolute disk path (agent reads via file_read tool)
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const dataUrl = e.target?.result as string;
+            const { uploadFile } = await import('../../../services/chat');
+            const serverPath = await uploadFile(file.name, dataUrl);
+            setAttachments((prev) =>
+              prev.map((a) => a.id === id ? { ...a, path: serverPath, status: 'ready' as const } : a)
+            );
+          } catch {
+            setAttachments((prev) =>
+              prev.map((a) => a.id === id ? { ...a, status: 'ready' as const } : a)
+            );
+          }
+        };
+        reader.onerror = () => {
+          setAttachments((prev) =>
+            prev.map((a) => a.id === id ? { ...a, status: 'ready' as const } : a)
+          );
+        };
+        reader.readAsDataURL(file);
       }
       newFiles.push({
         id,
         name: file.name,
         size: file.size,
         type: isImage ? 'image' : 'file',
-        status: tooLarge ? 'error' : (isImage ? 'uploading' : 'ready'),
+        status: tooLarge ? 'error' : 'uploading',
         errorMsg: tooLarge ? 'File too large (max 50 MB)' : undefined,
         path: (file as File & { path?: string }).path || file.name,
       });
@@ -79,7 +102,8 @@ export function Composer({ onSend, onStop, isGenerating, editorRef: externalEdit
     if (!text && attachments.length === 0) return;
     const readyImages = attachments.filter((a) => a.type === 'image' && a.status === 'ready');
     const pendingImages = attachments.filter((a) => a.type === 'image' && a.status === 'uploading');
-    if (pendingImages.length > 0) return;
+    const pendingFiles = attachments.filter((a) => a.type === 'file' && a.status === 'uploading');
+    if (pendingImages.length > 0 || pendingFiles.length > 0) return;
     const opts: SendOptions = {};
     const files = attachments.filter((a) => a.type === 'file');
     if (files.length > 0) {

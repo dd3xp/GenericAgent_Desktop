@@ -199,7 +199,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
       const now = Date.now();
       const localImages = opts?.images?.map((f) => ({ name: f.name, path: f.base64 || f.path || f.name }));
-      const userMsg: Message = { id: `local-${now}`, role: 'user', content: text, status: 'completed', createdAt: now, images: localImages };
+      const localFiles = opts?.files;
+      const userMsg: Message = { id: `local-${now}`, role: 'user', content: text, status: 'completed', createdAt: now, images: localImages, files: localFiles };
       set((s) => ({ messages: [...s.messages, userMsg], status: 'running', turnStartedAt: now }));
       startPolling();
       const llmNo = useSettingsStore.getState().selectedModelNo;
