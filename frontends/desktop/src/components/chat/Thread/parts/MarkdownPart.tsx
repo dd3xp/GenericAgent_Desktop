@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import type { Components } from 'react-markdown';
 import 'katex/dist/katex.min.css';
 import { CodeBlock } from './CodeBlock';
+import { DiffLines } from './DiffLines';
 import { SafeMathBlock } from './SafeMath';
 import { HugeTextFallback } from './HugeTextFallback';
 import { useSmoothReveal } from '../../../../hooks/useSmoothReveal';
@@ -48,6 +49,9 @@ function makeComponents(isStreaming: boolean): Components {
         // ```latex and ```tex go through normal code highlighting.
         if (match[1] === 'math') {
           return <SafeMathBlock expr={code} />;
+        }
+        if (match[1] === 'diff') {
+          return <DiffLines code={code} />;
         }
         return <CodeBlock language={match[1]} code={code} isStreaming={isStreaming} />;
       }
