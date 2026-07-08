@@ -130,7 +130,6 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll, o
     const el = document.getElementById(`msg-${id}`);
 
     if (!el) {
-      // Message is collapsed — expand all and let Thread handle the jump
       onJumpToCollapsed(id);
       return;
     }
@@ -138,9 +137,10 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll, o
     if (!viewport) return;
     stopScroll();
 
-    const vpRect = viewport.getBoundingClientRect();
-    const elRect = el.getBoundingClientRect();
-    const target = viewport.scrollTop + (elRect.top - vpRect.top) - SCROLL_TOP_MARGIN;
+    // Use the turn-pair container's offsetTop to avoid sticky positioning offset
+    const turnPair = el.closest<HTMLElement>('[data-slot="aui_turn-pair"]');
+    const scrollTarget = turnPair || el;
+    const target = scrollTarget.offsetTop - SCROLL_TOP_MARGIN;
     jumpScroll(viewport, target, JUMP_DURATION);
   }, [stopScroll, onJumpToCollapsed]);
 

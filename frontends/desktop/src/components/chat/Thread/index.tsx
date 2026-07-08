@@ -32,10 +32,9 @@ export function Thread() {
         pendingJumpRef.current = null;
         const viewport = scrollRef.current;
         if (viewport) {
-          const vpRect = viewport.getBoundingClientRect();
-          const elRect = el.getBoundingClientRect();
-          const target = viewport.scrollTop + (elRect.top - vpRect.top) - 12;
-          viewport.scrollTop = target;
+          const turnPair = el.closest<HTMLElement>('[data-slot="aui_turn-pair"]');
+          const scrollTarget = turnPair || el;
+          viewport.scrollTop = scrollTarget.offsetTop - 12;
         }
       }
     });
