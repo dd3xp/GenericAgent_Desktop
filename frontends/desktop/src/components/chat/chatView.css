@@ -6,3 +6,12 @@
   min-height: 0;
   overflow: hidden;
 }
+
+.ga-chat-offline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--semi-color-text-2);
+  font-size: 14px;
+}

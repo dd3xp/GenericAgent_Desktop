@@ -1,5 +1,5 @@
 .ga-services-page {
-  padding: 16px 24px;
+  padding: 16px 12px;
   height: 100%;
   overflow-y: auto;
 }
@@ -17,7 +17,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 0;
+  padding: 4px 0 12px;
 }
 
 .ga-channel-card {
@@ -60,7 +60,7 @@
 
 /* Status panel */
 .ga-status-panel {
-  padding: 12px 0;
+  padding: 4px 0 12px;
 }
 
 .ga-status-actions {

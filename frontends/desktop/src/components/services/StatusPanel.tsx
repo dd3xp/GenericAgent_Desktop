@@ -3,6 +3,7 @@ import { Table, Tag, Button, Spin, Empty } from '@douyinfe/semi-ui';
 import { IconPlay, IconStop, IconRefresh, IconFile, IconClose } from '@douyinfe/semi-icons';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { useI18n } from '../../i18n';
+import { useBridgeStatus } from '../../hooks/useBridgeStatus';
 import { useServicesStore, type ServiceInfo } from '../../stores/services';
 import { showError, showSuccess } from '../../utils/toast';
 import { isChannelService } from './ChannelList';
@@ -10,6 +11,7 @@ import { ChannelLogModal } from './ChannelLogModal';
 
 export function StatusPanel() {
   const { t } = useI18n();
+  const bridgeStatus = useBridgeStatus();
   const allServices = useServicesStore((s) => s.services);
   const loading = useServicesStore((s) => s.loading);
   const startService = useServicesStore((s) => s.startService);
@@ -211,6 +213,15 @@ export function StatusPanel() {
       },
     },
   ];
+
+  if (bridgeStatus !== 'ready') {
+    return (
+      <div className="ga-services-loading">
+        {bridgeStatus === 'connecting' ? <Spin size="large" /> : null}
+        <span>{bridgeStatus === 'connecting' ? t('bridge.connecting') : t('bridge.offline')}</span>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

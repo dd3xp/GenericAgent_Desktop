@@ -1,7 +1,7 @@
 import { useState, useCallback, type ReactNode } from 'react';
 import { useChatStore } from '../../stores/chat';
 import { useConductorStore } from '../../stores/conductor';
-import { useTokenStore } from '../../stores/token';
+import { useI18n } from '../../i18n';
 import { useBridgeStatus } from '../../hooks/useBridgeStatus';
 import { LiveDuration } from './LiveDuration';
 import { BridgeMenuPanel } from './BridgeMenuPanel';
@@ -74,13 +74,8 @@ function SpinnerIcon() {
   );
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
-
 export function Statusbar() {
+  const { t } = useI18n();
   const chatStatus = useChatStore((s) => s.status);
   const turnStartedAt = useChatStore((s) => s.turnStartedAt);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -88,8 +83,6 @@ export function Statusbar() {
 
   const bridgeStatus = useBridgeStatus();
   const conductorStatus = useConductorStore((s) => s.connectionStatus);
-  const snapshot = useTokenStore((s) => s.snapshot);
-  const conductorSnapshot = useTokenStore((s) => s.conductorSnapshot);
 
   const togglePanel = useCallback(() => { setPanelOpen((v) => !v); setConductorPanelOpen(false); }, []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -101,18 +94,17 @@ export function Statusbar() {
     : bridgeStatus === 'connecting' ? 'connecting'
     : 'offline';
   const bridgeDetail = bridgeStatus === 'ready' ? undefined
-    : bridgeStatus === 'connecting' ? 'connecting' : 'offline';
+    : bridgeStatus === 'connecting' ? t('bridge.connecting') : t('bridge.offline');
 
   // Conductor dot: sole source of truth is conductor WS connection state.
   const conductorDot: DotStatus = conductorStatus === 'ready' ? 'ready'
     : conductorStatus === 'error' ? 'error'
     : conductorStatus === 'connecting' ? 'connecting'
     : 'offline';
-  const conductorDetail = conductorStatus === 'ready' ? undefined : conductorStatus;
-
-  // Total tokens (bridge + conductor)
-  const totalTokens = snapshot.totalInput + snapshot.totalOutput
-    + conductorSnapshot.totalInput + conductorSnapshot.totalOutput;
+  const conductorDetail = conductorStatus === 'ready' ? undefined
+    : conductorStatus === 'connecting' ? t('bridge.connecting')
+    : conductorStatus === 'error' ? t('bridge.inferenceError')
+    : t('bridge.offline');
 
   return (
     <footer className="ga-statusbar">
@@ -145,9 +137,6 @@ export function Statusbar() {
             label="Turn"
             detail={<LiveDuration since={turnStartedAt} />}
           />
-        )}
-        {totalTokens > 0 && (
-          <StatusItem label={formatTokens(totalTokens)} detail="tokens" />
         )}
         <StatusItem label="v0.1.0" />
       </div>

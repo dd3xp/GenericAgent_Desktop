@@ -3,6 +3,7 @@ import type { Message } from '../../../services/chat';
 import { buildThreadGroups, type ThreadGroup } from '../../../lib/thread-grouping';
 import { TurnPair } from './TurnPair';
 import { UserMessage } from './UserMessage';
+import { InlineError } from './InlineError';
 
 const RENDER_BUDGET = 300;
 
@@ -97,6 +98,9 @@ export const MessageList = memo(function MessageList({
               <UserMessage content={group.msg.content} msgId={group.msg.id} images={group.msg.images} files={group.msg.files} />
             </div>
           );
+        }
+        if (group.msg.role === 'error') {
+          return <InlineError key={group.msg.id} error={group.msg.content} msgId={group.msg.id} />;
         }
         return (
           <div key={group.msg.id} data-slot="standalone-message" data-status={group.msg.status}>

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Button, Tag, Spin, Empty } from '@douyinfe/semi-ui';
 import { IconPlay, IconStop, IconFile, IconSetting } from '@douyinfe/semi-icons';
 import { useI18n } from '../../i18n';
+import { useBridgeStatus } from '../../hooks/useBridgeStatus';
 import { useServicesStore, type ServiceInfo } from '../../stores/services';
 import { showError, showSuccess } from '../../utils/toast';
 import { ChannelLogModal } from './ChannelLogModal';
@@ -44,6 +45,7 @@ export function isChannelService(svc: ServiceInfo): boolean {
 
 export function ChannelList() {
   const { t } = useI18n();
+  const bridgeStatus = useBridgeStatus();
   const services = useServicesStore((s) => s.services);
   const loading = useServicesStore((s) => s.loading);
   const startService = useServicesStore((s) => s.startService);
@@ -78,6 +80,15 @@ export function ChannelList() {
     },
     [startService, stopService, t],
   );
+
+  if (bridgeStatus !== 'ready') {
+    return (
+      <div className="ga-services-loading">
+        {bridgeStatus === 'connecting' ? <Spin size="large" /> : null}
+        <span>{bridgeStatus === 'connecting' ? t('bridge.connecting') : t('bridge.offline')}</span>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
