@@ -24,7 +24,6 @@ export function ChannelLogModal({ serviceId, onClose }: Props) {
     const result = await fetchLogs(serviceId);
     setLines(result);
     setLoading(false);
-    // Auto-scroll to bottom
     requestAnimationFrame(() => {
       if (preRef.current) {
         preRef.current.scrollTop = preRef.current.scrollHeight;
@@ -51,9 +50,10 @@ export function ChannelLogModal({ serviceId, onClose }: Props) {
       visible={serviceId !== null}
       onCancel={onClose}
       footer={null}
-      width={700}
-      style={{ maxHeight: '80vh' }}
-      bodyStyle={{ padding: 0 }}
+      width={870}
+      centered
+      closeOnEsc
+      className="ga-log-dialog"
     >
       {loading && lines.length === 0 ? (
         <div className="ga-services-loading" style={{ padding: 24 }}>

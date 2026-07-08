@@ -69,16 +69,34 @@
   align-items: center;
 }
 
-/* Log modal */
+/* Log dialog — aligned with ga-settings-dialog layout */
+.ga-log-dialog .semi-modal-content {
+  padding-left: 24px;
+  padding-right: 0;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ga-log-dialog .semi-modal-header {
+  padding-right: 24px;
+  flex-shrink: 0;
+}
+
+.ga-log-dialog .semi-modal-body {
+  padding: 0 24px 0 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
 .ga-log-pre {
   margin: 0;
-  padding: 16px;
+  padding: 16px 0;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
-  max-height: 60vh;
-  overflow-y: auto;
-  background: var(--dt-background);
   white-space: pre-wrap;
   word-break: break-all;
+  color: var(--semi-color-text-1);
 }
