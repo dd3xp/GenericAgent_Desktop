@@ -24,6 +24,7 @@ const KATEX_OPTIONS = {
   },
   strict: 'ignore' as const,
   trust: true,
+  errorColor: 'var(--semi-color-text-2)',
 };
 
 /** Messages longer than this threshold skip ReactMarkdown entirely. */
