@@ -221,7 +221,7 @@ export function StatusPanel() {
   }
 
   if (services.length === 0) {
-    return <Empty description={t('ch.empty')} />;
+    return <Empty description={t('st.offline')} />;
   }
 
   return (

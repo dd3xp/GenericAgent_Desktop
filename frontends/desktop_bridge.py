@@ -1105,7 +1105,7 @@ def _cpu_pct(pid: Optional[int]) -> Optional[float]:
 
 _ERROR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"errno 48|address already in use", re.I), "transient", "err.portBusy"),
-    (re.compile(r"Exception in thread conductor-agent", re.I), "fatal", "err.conductorCrash"),
+    (re.compile(r"Exception in thread conductor", re.I), "fatal", "err.conductorCrash"),
     (re.compile(r"ModuleNotFoundError|ImportError", re.I), "fatal", "err.missingModule"),
     (re.compile(r"ConnectionRefusedError|Connection refused", re.I), "warning", "err.connRefused"),
     (re.compile(r"TimeoutError|timed out", re.I), "warning", "err.timeout"),
