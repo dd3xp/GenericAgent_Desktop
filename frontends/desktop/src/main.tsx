@@ -6,6 +6,10 @@ if (document.documentElement.dataset.appearance === 'dark') {
   document.body.setAttribute('theme-mode', 'dark');
 }
 
+if ((window as any).__TAURI__ && navigator.platform.startsWith('Mac')) {
+  document.documentElement.dataset.platform = 'macos';
+}
+
 setTimeout(() => {
   document.body.classList.remove('no-transition');
 }, 0);

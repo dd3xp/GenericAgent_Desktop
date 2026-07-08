@@ -77,6 +77,14 @@ export default defineConfig({
     globals: true,
     setupFiles: [],
   },
+  build: {
+    cssCodeSplit: false,
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true,
+      },
+    },
+  },
   optimizeDeps: {
     esbuildOptions: {
       plugins: [prismjsEsbuildPlugin()],
