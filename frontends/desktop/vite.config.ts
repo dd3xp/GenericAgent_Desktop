@@ -78,10 +78,10 @@ export default defineConfig({
     setupFiles: [],
   },
   build: {
-    cssCodeSplit: false,
     rollupOptions: {
-      output: {
-        inlineDynamicImports: true,
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        loading: path.resolve(__dirname, 'loading.html'),
       },
     },
   },

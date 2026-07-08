@@ -40,6 +40,22 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "dmg"],
-    "icon": ["icons/icon.ico", "icons/icon.png", "icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"]
+    "icon": ["icons/icon.ico", "icons/icon.png", "icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"],
+    "macOS": {
+      "dmg": {
+        "windowSize": {
+          "width": 540,
+          "height": 380
+        },
+        "appPosition": {
+          "x": 140,
+          "y": 200
+        },
+        "applicationFolderPosition": {
+          "x": 400,
+          "y": 200
+        }
+      }
+    }
   }
 }
