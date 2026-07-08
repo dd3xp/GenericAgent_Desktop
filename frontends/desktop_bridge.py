@@ -1103,6 +1103,23 @@ def _cpu_pct(pid: Optional[int]) -> Optional[float]:
         return None
 
 
+_ERROR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    (re.compile(r"errno 48|address already in use", re.I), "transient", "err.portBusy"),
+    (re.compile(r"Exception in thread conductor-agent", re.I), "fatal", "err.conductorCrash"),
+    (re.compile(r"ModuleNotFoundError|ImportError", re.I), "fatal", "err.missingModule"),
+    (re.compile(r"ConnectionRefusedError|Connection refused", re.I), "warning", "err.connRefused"),
+    (re.compile(r"TimeoutError|timed out", re.I), "warning", "err.timeout"),
+]
+
+
+def _classify_log_error(line: str) -> tuple[str, str] | None:
+    """Classify a log line by severity. Returns (severity, i18n_key) or None."""
+    for pattern, severity, key in _ERROR_PATTERNS:
+        if pattern.search(line):
+            return (severity, key)
+    return None
+
+
 class ServiceManager:
     """hub.pyw ServiceManager + HTTP/WS glue."""
 
@@ -1124,7 +1141,34 @@ class ServiceManager:
         mykeys = _load_mykeys(self.ga_root)
         return all(str(mykeys.get(k) or "").strip() for k in keys)
 
+    def _scan_errors(self, sid: str, n: int = 20) -> dict:
+        """Scan last N buffer lines, classify by severity.
+        Returns {"fatal": (line, key) | None, "warning": (line, key) | None}.
+        Transient errors (e.g. port-busy retry) are discarded.
+        """
+        buf = self.buffers.get(sid)
+        if not buf:
+            return {"fatal": None, "warning": None}
+        lines = [ln.strip() for ln in list(buf)[-n:] if ln.strip()]
+        if not lines:
+            return {"fatal": None, "warning": None}
+        result: dict = {"fatal": None, "warning": None}
+        for line in lines:
+            classified = _classify_log_error(line)
+            if classified is None:
+                continue
+            severity, key = classified
+            if severity == "fatal":
+                result["fatal"] = (line[:300], key)
+            elif severity == "warning":
+                result["warning"] = (line[:300], key)
+        return result
+
     def _log_tail(self, sid: str, n: int = 3) -> str:
+        """Legacy: return last fatal error line for lastError field."""
+        scan = self._scan_errors(sid, n=20)
+        if scan["fatal"]:
+            return scan["fatal"][0]
         buf = self.buffers.get(sid)
         if not buf:
             return ""
@@ -1136,20 +1180,40 @@ class ServiceManager:
         running = proc is not None and proc.poll() is None
         status = "running" if running else "offline"
         last_error = err
+        error_key = ""
+        last_warning = ""
+        warning_key = ""
+        scan = self._scan_errors(sid)
         if proc is not None and proc.poll() is not None:
             if sid in self._stopping:
                 status, last_error = "offline", ""
             else:
                 status = "error"
-                last_error = err or self._log_tail(sid) or f"exit code {proc.returncode}"
+                if scan["fatal"]:
+                    last_error = scan["fatal"][0]
+                    error_key = scan["fatal"][1]
+                elif err:
+                    last_error = err
+                else:
+                    last_error = f"exit code {proc.returncode}"
+        elif running:
+            if scan["warning"]:
+                last_warning = scan["warning"][0]
+                warning_key = scan["warning"][1]
         elif err:
             status, running = "error", False
+            last_error = err
+            if scan["fatal"]:
+                error_key = scan["fatal"][1]
         return {
             "id": sid,
             "status": status,
             "running": running,
             "pid": proc.pid if running else None,
             "lastError": last_error,
+            "errorKey": error_key,
+            "lastWarning": last_warning,
+            "warningKey": warning_key,
         }
 
     def list_state(self) -> List[dict]:

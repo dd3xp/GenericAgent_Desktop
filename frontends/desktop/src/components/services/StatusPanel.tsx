@@ -68,17 +68,38 @@ export function StatusPanel() {
     [restartService, t, withBusy],
   );
 
-  const statusTag = (status: ServiceInfo['status']) => {
+  const statusTag = (svc: ServiceInfo) => {
+    const { status, errorKey, warningKey, lastError, lastWarning } = svc;
     const map: Record<string, { color: string; text: string }> = {
       running: { color: 'green', text: t('st.running') },
       offline: { color: 'grey', text: t('st.offline') },
       error: { color: 'red', text: t('st.error') },
+      warning: { color: 'amber', text: t('st.warning') },
     };
     const cfg = map[status] ?? map.offline;
+    const detail = errorKey ? t(errorKey) : warningKey ? t(warningKey) : (lastError || lastWarning || '');
+    const hasDetail = status === 'error' || (status === 'running' && warningKey);
     return (
-      <Tag size="small" color={cfg.color as 'green' | 'grey' | 'red'} type="light">
-        {cfg.text}
-      </Tag>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <Tag size="small" color={cfg.color as 'green' | 'grey' | 'red' | 'amber'} type="light">
+          {cfg.text}
+        </Tag>
+        {hasDetail && detail && (
+          <span
+            title={lastError || lastWarning || ''}
+            style={{
+              fontSize: 11,
+              color: status === 'error' ? 'var(--semi-color-danger)' : 'var(--semi-color-warning)',
+              maxWidth: 200,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {detail.length > 50 ? detail.slice(0, 50) + '…' : detail}
+          </span>
+        )}
+      </span>
     );
   };
 
@@ -95,8 +116,8 @@ export function StatusPanel() {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
-      render: (_text: unknown, record: ServiceInfo) => statusTag(record.status),
+      width: 220,
+      render: (_text: unknown, record: ServiceInfo) => statusTag(record),
     },
     {
       title: 'PID',

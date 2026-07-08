@@ -3,13 +3,16 @@ import { BRIDGE_BASE } from './constants';
 export interface ServiceInfo {
   id: string;
   name: string;
-  status: 'running' | 'offline' | 'error';
+  status: 'running' | 'offline' | 'error' | 'warning';
   running: boolean;
   pid: number | null;
   memMb: number | null;
   cpuPct: number | null;
   managed: boolean;
   lastError: string | null;
+  errorKey?: string;
+  lastWarning?: string;
+  warningKey?: string;
 }
 
 export async function fetchServicesPanel(): Promise<ServiceInfo[]> {
