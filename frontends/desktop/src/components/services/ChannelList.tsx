@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
 import { Button, Tag, Spin, Empty } from '@douyinfe/semi-ui';
-import { IconPlay, IconStop, IconFile, IconSetting } from '@douyinfe/semi-icons';
+import { IconPlay, IconStop, IconFile, IconSetting, IconAlertTriangle } from '@douyinfe/semi-icons';
 import { useI18n } from '../../i18n';
 import { useBridgeStatus } from '../../hooks/useBridgeStatus';
 import { useServicesStore, type ServiceInfo } from '../../stores/services';
 import { showError, showSuccess } from '../../utils/toast';
+import { isTauri, invokeStartBridge } from '../../utils/tauri';
 import { ChannelLogModal } from './ChannelLogModal';
 import { MykeyConfigModal } from './MykeyConfigModal';
 
@@ -54,8 +55,20 @@ export function ChannelList() {
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [logTarget, setLogTarget] = useState<string | null>(null);
   const [showMykey, setShowMykey] = useState(false);
+  const [restarting, setRestarting] = useState(false);
 
   const channels = services.filter(isChannelService);
+
+  const handleRestartBridge = useCallback(async () => {
+    setRestarting(true);
+    try {
+      await invokeStartBridge();
+    } catch {
+      showError(t('err.bridge'));
+    } finally {
+      setRestarting(false);
+    }
+  }, [t]);
 
   const handleToggle = useCallback(
     async (svc: ServiceInfo) => {
@@ -81,16 +94,25 @@ export function ChannelList() {
     [startService, stopService, t],
   );
 
-  if (bridgeStatus !== 'ready') {
+  const isOffline = bridgeStatus !== 'ready';
+
+  if (isOffline && channels.length === 0) {
     return (
-      <div className="ga-services-loading">
-        {bridgeStatus === 'connecting' ? <Spin size="large" /> : null}
-        <span>{bridgeStatus === 'connecting' ? t('bridge.connecting') : t('bridge.offline')}</span>
+      <div className="ga-services-loading ga-services-loading--col">
+        <IconAlertTriangle style={{ color: 'var(--semi-color-warning)', fontSize: 24 }} />
+        <span>{t('bridge.notRunning')}</span>
+        {isTauri() ? (
+          <Button loading={restarting} onClick={handleRestartBridge} theme="light" type="primary">
+            {t('bridge.restart')}
+          </Button>
+        ) : (
+          <code className="ga-bridge-hint">{t('bridge.notRunningHint')}</code>
+        )}
       </div>
     );
   }
 
-  if (loading) {
+  if (loading && channels.length === 0) {
     return (
       <div className="ga-services-loading">
         <Spin size="large" />
@@ -99,12 +121,23 @@ export function ChannelList() {
     );
   }
 
-  if (channels.length === 0) {
+  if (!isOffline && channels.length === 0) {
     return <Empty description={t('ch.empty')} />;
   }
 
   return (
     <div className="ga-channel-list">
+      {isOffline && (
+        <div className="ga-offline-banner">
+          <IconAlertTriangle size="small" />
+          <span>{t('bridge.staleData')}</span>
+          {isTauri() && (
+            <Button size="small" loading={restarting} onClick={handleRestartBridge} theme="light">
+              {t('bridge.restart')}
+            </Button>
+          )}
+        </div>
+      )}
       {channels.map((svc) => {
         const meta = CHANNEL_META[svc.id] || CHANNEL_META[svc.name];
         const labelKey = meta?.label || '';
@@ -137,6 +170,7 @@ export function ChannelList() {
                 size="small"
                 icon={svc.running ? <IconStop /> : <IconPlay />}
                 loading={busy}
+                disabled={isOffline}
                 onClick={() => handleToggle(svc)}
                 type={svc.running ? 'danger' : 'primary'}
                 theme="light"

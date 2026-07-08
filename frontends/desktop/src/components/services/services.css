@@ -13,6 +13,20 @@
   padding: 48px 0;
 }
 
+.ga-services-loading--col {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ga-bridge-hint {
+  font-size: 12px;
+  color: var(--semi-color-text-2);
+  background: var(--semi-color-fill-0);
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
 /* Channel cards */
 .ga-channel-list {
   display: flex;
@@ -63,6 +77,24 @@
 /* Status panel */
 .ga-status-panel {
   padding: 4px 0 12px;
+}
+
+/* Offline banner — shown when bridge disconnects but stale data is available */
+.ga-offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: var(--semi-color-warning-light-default);
+  color: var(--semi-color-warning);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ga-offline-banner > span {
+  flex: 1;
 }
 
 .ga-status-actions {

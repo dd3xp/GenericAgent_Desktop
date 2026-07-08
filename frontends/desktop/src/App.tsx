@@ -5,7 +5,6 @@ import en_US from '@douyinfe/semi-ui/lib/es/locale/source/en_US';
 import { useSettingsStore } from './stores/settings';
 import { AppLayout } from './components/layout/AppLayout';
 import { NotificationStack } from './components/layout/NotificationStack';
-import { ConnectingOverlay } from './components/layout/ConnectingOverlay';
 import { SettingsModal } from './components/settings/SettingsModal';
 
 const SEMI_LOCALES = { zh: zh_CN, en: en_US };
@@ -23,7 +22,6 @@ export function App() {
       <AppLayout />
       <SettingsModal />
       <NotificationStack />
-      <ConnectingOverlay />
     </LocaleProvider>
   );
 }

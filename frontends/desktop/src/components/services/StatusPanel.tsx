@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
 import { Table, Tag, Button, Spin, Empty } from '@douyinfe/semi-ui';
-import { IconPlay, IconStop, IconRefresh, IconFile, IconClose } from '@douyinfe/semi-icons';
+import { IconPlay, IconStop, IconRefresh, IconFile, IconClose, IconAlertTriangle } from '@douyinfe/semi-icons';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { useI18n } from '../../i18n';
 import { useBridgeStatus } from '../../hooks/useBridgeStatus';
 import { useServicesStore, type ServiceInfo } from '../../stores/services';
 import { showError, showSuccess } from '../../utils/toast';
+import { isTauri, invokeStartBridge } from '../../utils/tauri';
 import { isChannelService } from './ChannelList';
 import { ChannelLogModal } from './ChannelLogModal';
 
@@ -21,8 +22,20 @@ export function StatusPanel() {
 
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [logTarget, setLogTarget] = useState<string | null>(null);
+  const [restarting, setRestarting] = useState(false);
 
   const services = allServices.filter((svc) => !isChannelService(svc));
+
+  const handleRestartBridge = useCallback(async () => {
+    setRestarting(true);
+    try {
+      await invokeStartBridge();
+    } catch {
+      showError(t('err.bridge'));
+    } finally {
+      setRestarting(false);
+    }
+  }, [t]);
 
   const withBusy = useCallback(
     async (id: string, action: () => Promise<boolean>) => {
@@ -111,6 +124,8 @@ export function StatusPanel() {
     );
   };
 
+  const isOffline = bridgeStatus !== 'ready';
+
   const columns: ColumnProps<ServiceInfo>[] = [
     {
       title: t('tok.colSession'),
@@ -176,6 +191,7 @@ export function StatusPanel() {
                     icon={<IconRefresh />}
                     theme="borderless"
                     loading={busy}
+                    disabled={isOffline}
                     onClick={() => handleRestart(record)}
                   >
                     {t('act.restart')}
@@ -187,6 +203,7 @@ export function StatusPanel() {
                   theme="borderless"
                   type="danger"
                   loading={busy}
+                  disabled={isOffline}
                   onClick={() => handleStop(record)}
                 >
                   {record.managed ? t('act.stop') : t('act.exit')}
@@ -200,6 +217,7 @@ export function StatusPanel() {
                   theme="borderless"
                   type="primary"
                   loading={busy}
+                  disabled={isOffline}
                   onClick={() => handleStart(record)}
                 >
                   {t('act.start')}
@@ -220,16 +238,23 @@ export function StatusPanel() {
     },
   ];
 
-  if (bridgeStatus !== 'ready') {
+  if (isOffline && services.length === 0) {
     return (
-      <div className="ga-services-loading">
-        {bridgeStatus === 'connecting' ? <Spin size="large" /> : null}
-        <span>{bridgeStatus === 'connecting' ? t('bridge.connecting') : t('bridge.offline')}</span>
+      <div className="ga-services-loading ga-services-loading--col">
+        <IconAlertTriangle style={{ color: 'var(--semi-color-warning)', fontSize: 24 }} />
+        <span>{t('bridge.notRunning')}</span>
+        {isTauri() ? (
+          <Button loading={restarting} onClick={handleRestartBridge} theme="light" type="primary">
+            {t('bridge.restart')}
+          </Button>
+        ) : (
+          <code className="ga-bridge-hint">{t('bridge.notRunningHint')}</code>
+        )}
       </div>
     );
   }
 
-  if (loading) {
+  if (loading && services.length === 0) {
     return (
       <div className="ga-services-loading">
         <Spin size="large" />
@@ -237,12 +262,23 @@ export function StatusPanel() {
     );
   }
 
-  if (services.length === 0) {
+  if (!isOffline && services.length === 0) {
     return <Empty description={t('st.offline')} />;
   }
 
   return (
     <div className="ga-status-panel">
+      {isOffline && (
+        <div className="ga-offline-banner">
+          <IconAlertTriangle size="small" />
+          <span>{t('bridge.staleData')}</span>
+          {isTauri() && (
+            <Button size="small" loading={restarting} onClick={handleRestartBridge} theme="light">
+              {t('bridge.restart')}
+            </Button>
+          )}
+        </div>
+      )}
       <Table
         columns={columns}
         dataSource={services}
