@@ -1,21 +1,22 @@
-import { Toast, ToastFactory } from '@douyinfe/semi-ui';
+import { useNotificationStore } from '../stores/notifications';
 
-const globalToast = ToastFactory.create({ getPopupContainer: () => document.body });
-
-export function showToast(content: string, duration = 3) {
-  globalToast.info({ content, duration });
+function notify(message: string, kind: 'error' | 'warning' | 'info' | 'success') {
+  useNotificationStore.getState().notify({ kind, message });
 }
 
-export function showError(content: string, duration = 4) {
-  globalToast.error({ content, duration });
+export function showToast(content: string) {
+  notify(content, 'info');
 }
 
-export function showSuccess(content: string, duration = 3) {
-  globalToast.success({ content, duration });
+export function showError(content: string) {
+  notify(content, 'error');
+}
+
+export function showSuccess(content: string) {
+  notify(content, 'success');
 }
 
 export function showSystem(content: string) {
-  globalToast.info({ content, duration: 2, showClose: false });
+  notify(content, 'info');
 }
 
-export { Toast, globalToast };

@@ -234,3 +234,5 @@ export const useConductorStore = create<ConductorState>((set, get) => {
     },
   };
 });
+
+useConductorStore.getState().connect();

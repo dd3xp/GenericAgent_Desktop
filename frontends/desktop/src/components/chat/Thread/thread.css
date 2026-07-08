@@ -622,3 +622,18 @@
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.9; }
 }
+
+/* ─── Inline Error ─── */
+.ga-inline-error {
+  padding: 6px 12px;
+  margin: 4px 0;
+  color: var(--semi-color-danger);
+  font-size: var(--conversation-caption-font-size);
+  line-height: var(--conversation-caption-line-height);
+  opacity: 0.85;
+}
+
+.ga-inline-error-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -13,9 +13,20 @@ const listeners = new Map<string, Set<WsHandler>>();
 let currentStatus: BridgeStatus = 'offline';
 const statusListeners = new Set<(s: BridgeStatus) => void>();
 
+let everConnected = false;
+let failCount = 0;
+const everConnectedListeners = new Set<() => void>();
+
 function setStatus(s: BridgeStatus) {
   if (s === currentStatus) return;
   currentStatus = s;
+  if (s === 'ready') {
+    failCount = 0;
+    if (!everConnected) {
+      everConnected = true;
+      everConnectedListeners.forEach((fn) => fn());
+    }
+  }
   statusListeners.forEach((fn) => fn(s));
 }
 
@@ -72,6 +83,7 @@ function scheduleReconnect() {
   if (reconnectTimer) return;
   const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempt, RECONNECT_MAX_MS);
   reconnectAttempt++;
+  failCount++;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect();
@@ -94,4 +106,17 @@ export function disconnect() {
   }
   ws?.close();
   ws = null;
+}
+
+export function getBridgeEverConnected(): boolean {
+  return everConnected;
+}
+
+export function getBridgeFailCount(): number {
+  return failCount;
+}
+
+export function onBridgeEverConnectedChange(fn: () => void): () => void {
+  everConnectedListeners.add(fn);
+  return () => { everConnectedListeners.delete(fn); };
 }

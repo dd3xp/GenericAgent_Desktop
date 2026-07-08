@@ -4,7 +4,7 @@ export type MessageStatus = 'completed' | 'in_progress' | 'failed';
 
 export interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'error';
   content: string;
   status: MessageStatus;
   createdAt?: number;
