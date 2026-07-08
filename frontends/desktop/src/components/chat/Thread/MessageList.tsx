@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { memo, useMemo, useRef, useLayoutEffect } from 'react';
 import type { Message } from '../../../services/chat';
 import { buildThreadGroups, type ThreadGroup } from '../../../lib/thread-grouping';
 import { TurnPair } from './TurnPair';
@@ -9,7 +9,8 @@ const RENDER_BUDGET = 300;
 interface Props {
   messages: Message[];
   isRunning: boolean;
-  activeSessionId: string | null;
+  budgetMultiplier: number;
+  onShowEarlier: () => void;
   scrollRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -23,20 +24,16 @@ function getGroupPartCount(group: ThreadGroup): number {
 export const MessageList = memo(function MessageList({
   messages,
   isRunning,
-  activeSessionId,
+  budgetMultiplier,
+  onShowEarlier,
   scrollRef,
 }: Props) {
   const groups = useMemo(() => buildThreadGroups(messages), [messages]);
-  const [budgetMultiplier, setBudgetMultiplier] = useState(1);
   const savedDistanceRef = useRef<number | null>(null);
-
-  // Reset budget when session changes
-  useEffect(() => {
-    setBudgetMultiplier(1);
-  }, [activeSessionId]);
 
   // Compute cutoff index
   const cutoffIndex = useMemo(() => {
+    if (!isFinite(budgetMultiplier)) return 0;
     const totalBudget = RENDER_BUDGET * budgetMultiplier;
     let accumulated = 0;
     for (let i = groups.length - 1; i >= 0; i--) {
@@ -59,13 +56,13 @@ export const MessageList = memo(function MessageList({
     }
   });
 
-  const handleShowEarlier = useCallback(() => {
+  const handleShowEarlier = () => {
     const viewport = scrollRef?.current;
     if (viewport) {
       savedDistanceRef.current = viewport.scrollHeight - viewport.scrollTop;
     }
-    setBudgetMultiplier(m => m + 1);
-  }, [scrollRef]);
+    onShowEarlier();
+  };
 
   if (messages.length === 0) {
     return (

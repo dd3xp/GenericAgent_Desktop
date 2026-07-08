@@ -4,10 +4,13 @@ import './UserTurnRail.css';
 
 const MIN_TURNS = 3;
 const MAX_PREVIEW_CHARS = 40;
+const JUMP_DURATION = 170;
+const SCROLL_TOP_MARGIN = 12;
 
 interface Props {
   messages: Message[];
   stopScroll: () => void;
+  onJumpToCollapsed: (msgId: string) => void;
 }
 
 interface UserTurn {
@@ -22,7 +25,29 @@ function previewText(content: string): string {
     : normalized.slice(0, MAX_PREVIEW_CHARS) + '…';
 }
 
-export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll }: Props) {
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+let jumpRaf = 0;
+
+function jumpScroll(el: HTMLElement, targetTop: number, duration: number) {
+  cancelAnimationFrame(jumpRaf);
+  const start = el.scrollTop;
+  const diff = targetTop - start;
+  if (Math.abs(diff) < 1) return;
+  const startTime = performance.now();
+
+  function step(now: number) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    el.scrollTop = start + diff * easeOutCubic(t);
+    if (t < 1) jumpRaf = requestAnimationFrame(step);
+  }
+  jumpRaf = requestAnimationFrame(step);
+}
+
+export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll, onJumpToCollapsed }: Props) {
   const userTurns: UserTurn[] = useMemo(
     () => messages
       .filter((m) => m.role === 'user')
@@ -32,9 +57,8 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll }:
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
-  const observerRef = useRef<IntersectionObserver | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const observedIds = useRef<Set<string>>(new Set());
+  const scrollRaf = useRef(0);
 
   const handleMouseEnter = useCallback(() => {
     if (leaveTimer.current) {
@@ -51,64 +75,74 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll }:
     }, 150);
   }, []);
 
+  // Scroll-based active tracking: find the last user message whose top is at or above viewport top.
   useEffect(() => {
     if (userTurns.length < MIN_TURNS) return;
 
-    const root = document.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
-    if (!root) return;
+    const viewport = document.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
+    if (!viewport) return;
 
-    if (!observerRef.current) {
-      observerRef.current = new IntersectionObserver(
-        (entries) => {
-          const visible = entries
-            .filter((e) => e.isIntersecting)
-            .sort((a, b) => Math.abs(a.boundingClientRect.top) - Math.abs(b.boundingClientRect.top));
+    function updateActive() {
+      scrollRaf.current = 0;
+      if (!viewport) return;
 
-          const nearest = visible[0];
-          if (nearest) {
-            const id = nearest.target.getAttribute('data-msg-id');
-            if (id) setActiveId(id);
-          }
-        },
-        {
-          root,
-          rootMargin: '-20% 0px -65% 0px',
-          threshold: [0, 0.1, 0.5, 1],
-        },
-      );
+      const vpTop = viewport.getBoundingClientRect().top;
+      let bestId: string | null = null;
+
+      for (const turn of userTurns) {
+        const el = document.getElementById(`msg-${turn.id}`);
+        if (!el) continue;
+        const elTop = el.getBoundingClientRect().top - vpTop;
+        // Pick the last user message whose top edge is within SCROLL_TOP_MARGIN of viewport top
+        if (elTop <= SCROLL_TOP_MARGIN) {
+          bestId = turn.id;
+        } else {
+          break;
+        }
+      }
+
+      // If nothing qualifies (user hasn't scrolled past any), pick the first
+      if (!bestId && userTurns.length > 0) {
+        bestId = userTurns[0].id;
+      }
+
+      if (bestId) setActiveId(bestId);
     }
 
-    const observer = observerRef.current;
-
-    for (const turn of userTurns) {
-      if (observedIds.current.has(turn.id)) continue;
-      const el = document.getElementById(`msg-${turn.id}`);
-      if (el) {
-        observer.observe(el);
-        observedIds.current.add(turn.id);
+    function onScroll() {
+      if (!scrollRaf.current) {
+        scrollRaf.current = requestAnimationFrame(updateActive);
       }
     }
 
+    viewport.addEventListener('scroll', onScroll, { passive: true });
+    // Initial calculation
+    updateActive();
+
     return () => {
-      observer.disconnect();
-      observedIds.current.clear();
-      observerRef.current = null;
+      viewport.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(scrollRaf.current);
     };
   }, [userTurns]);
 
   const handleJump = useCallback((id: string) => {
     const viewport = document.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
     const el = document.getElementById(`msg-${id}`);
-    if (!viewport || !el) return;
 
+    if (!el) {
+      // Message is collapsed — expand all and let Thread handle the jump
+      onJumpToCollapsed(id);
+      return;
+    }
+
+    if (!viewport) return;
     stopScroll();
-    const elRect = el.getBoundingClientRect();
+
     const vpRect = viewport.getBoundingClientRect();
-    viewport.scrollTo({
-      top: viewport.scrollTop + (elRect.top - vpRect.top) - 16,
-      behavior: 'smooth',
-    });
-  }, [stopScroll]);
+    const elRect = el.getBoundingClientRect();
+    const target = viewport.scrollTop + (elRect.top - vpRect.top) - SCROLL_TOP_MARGIN;
+    jumpScroll(viewport, target, JUMP_DURATION);
+  }, [stopScroll, onJumpToCollapsed]);
 
   if (userTurns.length < MIN_TURNS) return null;
 
@@ -117,33 +151,38 @@ export const UserTurnRail = memo(function UserTurnRail({ messages, stopScroll }:
       data-slot="user-turn-rail"
       data-expanded={hovered || undefined}
       aria-label="User message navigation"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
     >
-      <div data-slot="rail-marks">
-        {userTurns.map((turn) => (
-          <button
-            key={turn.id}
-            data-slot="rail-mark"
-            data-active={turn.id === activeId || undefined}
-            aria-label={previewText(turn.content)}
-            onClick={() => handleJump(turn.id)}
-          >
-            <span data-slot="rail-mark-line" />
-          </button>
-        ))}
-      </div>
+      <div
+        data-slot="rail-hitarea"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div data-slot="rail-panel" aria-hidden={!hovered}>
+          {userTurns.map((turn) => (
+            <button
+              key={turn.id}
+              data-slot="rail-panel-item"
+              data-active={turn.id === activeId || undefined}
+              onClick={() => handleJump(turn.id)}
+            >
+              {previewText(turn.content)}
+            </button>
+          ))}
+        </div>
 
-      <div data-slot="rail-panel" aria-hidden={!hovered}>
-        {userTurns.map((turn) => (
-          <button
-            key={turn.id}
-            data-slot="rail-panel-item"
-            onClick={() => handleJump(turn.id)}
-          >
-            {previewText(turn.content)}
-          </button>
-        ))}
+        <div data-slot="rail-marks">
+          {userTurns.map((turn) => (
+            <button
+              key={turn.id}
+              data-slot="rail-mark"
+              data-active={turn.id === activeId || undefined}
+              aria-label={previewText(turn.content)}
+              onClick={() => handleJump(turn.id)}
+            >
+              <span data-slot="rail-mark-line" />
+            </button>
+          ))}
+        </div>
       </div>
     </nav>
   );
