@@ -1467,6 +1467,9 @@ atexit.register(_bridge_shutdown_services)
 
 
 def emit_session_state(sess: Session, state_name: str):
+    if state_name != "created":
+        title = (sess.title or sess.id)[:20]
+        bridge_print(f"[session] {title}: {state_name}")
     hub.emit({
         "type": "session-state",
         "sessionId": sess.id,
