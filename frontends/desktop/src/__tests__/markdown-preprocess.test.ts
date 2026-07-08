@@ -36,7 +36,10 @@ describe('preprocessMarkdown', () => {
 
     it('does not modify $ inside tilde fenced code blocks', () => {
       const input = '~~~\n$HOME\n~~~';
-      expect(preprocessMarkdown(input)).toBe(input);
+      const output = preprocessMarkdown(input);
+      // normalizeFenceBlocks rewrites ~~~ to ``` (standard normalization)
+      expect(output).toContain('$HOME');
+      expect(output).not.toContain('\\$HOME');
     });
 
     it('processes prose outside code fences normally', () => {
