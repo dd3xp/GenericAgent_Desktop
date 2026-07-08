@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createSession, sendPrompt, pollMessages, cancelGeneration, listSessions, deleteSession as apiDeleteSession, renameSession as apiRenameSession, pinSession as apiPinSession, type Message, type SessionInfo } from '../services/chat';
-import { subscribe } from '../services/ws';
+import { subscribe, onBridgeStatusChange } from '../services/ws';
 import { useSettingsStore } from './settings';
 
 const PARTIAL_MSG_ID = '__partial__';
@@ -329,4 +329,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       try { await apiPinSession(id, pinned); } catch {}
     },
   };
+});
+
+// Reload session list whenever the bridge (re)connects.
+onBridgeStatusChange((status) => {
+  if (status === 'ready') {
+    useChatStore.getState().loadSessions();
+  }
 });
