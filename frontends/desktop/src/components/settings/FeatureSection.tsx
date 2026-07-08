@@ -42,7 +42,7 @@ export function FeatureSection() {
   };
 
   const handleOpenServices = () => {
-    window.dispatchEvent(new CustomEvent('ga:go-page', { detail: 'services' }));
+    window.dispatchEvent(new CustomEvent('ga:go-page', { detail: { page: 'services' } }));
     window.dispatchEvent(new Event('ga:close-settings'));
   };
 
