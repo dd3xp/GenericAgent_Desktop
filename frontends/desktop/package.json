@@ -8,6 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:bridge": "vitest run src/__tests__/bridge/",
+    "test:stress": "vitest run src/__tests__/stress/",
+    "test:bundle": "node scripts/assert-dist-built.mjs",
+    "test:packaging": "node scripts/test-packaging.mjs",
+    "test:all": "vitest run && node scripts/assert-dist-built.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
