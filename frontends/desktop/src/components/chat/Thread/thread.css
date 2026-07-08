@@ -278,7 +278,8 @@
   transition: opacity 120ms ease-out;
 }
 
-[data-slot="tool-block"]:hover {
+[data-slot="tool-block"]:hover,
+[data-slot="tool-block"]:focus-within {
   opacity: 1;
 }
 
@@ -349,6 +350,7 @@
   border-radius: 0.3125rem;
   border: 1px solid var(--semi-color-border);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 7.5rem;

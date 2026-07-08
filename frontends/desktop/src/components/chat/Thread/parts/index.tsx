@@ -25,15 +25,21 @@ export const MessageParts = memo(function MessageParts({ segments, isStreaming, 
 
   if (segments.length === 0) return null;
 
-  const totalContentLength = segments.reduce((acc, s) => acc + s.content.length, 0);
+  // Stale part fallback: when message is settled, force inFlight to false
+  const resolvedSegments = isStreaming ? segments : segments.map(seg =>
+    seg.inFlight ? { ...seg, inFlight: false } : seg
+  );
+
+  const totalContentLength = resolvedSegments.reduce((acc, s) => acc + s.content.length, 0);
+  const hasActiveApproval = resolvedSegments.some(s => s.type === 'approval');
 
   return (
     <div data-slot="aui_assistant-message-content">
-      {segments.map((seg, i) => {
+      {resolvedSegments.map((seg, i) => {
         const segKey = `${messageId}-${i}`;
         switch (seg.type) {
           case 'prose':
-            return <MarkdownPart key={i} content={seg.content} isStreaming={isStreaming && i === segments.length - 1} />;
+            return <MarkdownPart key={i} content={seg.content} isStreaming={isStreaming && i === resolvedSegments.length - 1} />;
           case 'thinking':
             return <ThinkingPart key={i} content={seg.content} isStreaming={!!seg.inFlight || isStreaming} />;
           case 'tool':
@@ -48,7 +54,7 @@ export const MessageParts = memo(function MessageParts({ segments, isStreaming, 
             return null;
         }
       })}
-      {isStreaming && <StreamStallIndicator contentLength={totalContentLength} />}
+      {isStreaming && !hasActiveApproval && <StreamStallIndicator contentLength={totalContentLength} />}
     </div>
   );
 });

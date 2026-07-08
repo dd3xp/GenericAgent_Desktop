@@ -19,9 +19,11 @@ export const ToolPart = memo(function ToolPart({ name, content, inFlight, segmen
   return (
     <div ref={ref} data-slot="tool-block" data-tool-row data-status={inFlight ? 'running' : 'success'}>
       <div data-slot="tool-header" onClick={() => setExpanded(!expanded)}>
-        <span data-slot="tool-glyph">
-          {inFlight ? <span data-slot="tool-spinner" /> : <CheckGlyph />}
-        </span>
+        {inFlight && (
+          <span data-slot="tool-glyph">
+            <span data-slot="tool-spinner" />
+          </span>
+        )}
         <span data-slot="tool-title">{name}</span>
         {inFlight && <span data-slot="tool-dots">&hellip;</span>}
         {elapsed && <span data-slot="tool-duration">{elapsed}</span>}
@@ -33,11 +35,3 @@ export const ToolPart = memo(function ToolPart({ name, content, inFlight, segmen
     </div>
   );
 });
-
-function CheckGlyph() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-      <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
