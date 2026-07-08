@@ -19,7 +19,7 @@ export function Thread() {
         data-following={isAtBottom}
       >
         <ThreadContent>
-          <MessageList messages={messages} isRunning={status === 'running'} />
+          <MessageList messages={messages} isRunning={status === 'running'} activeSessionId={activeSessionId} scrollRef={scrollRef} />
           <div data-slot="aui_composer-clearance" />
         </ThreadContent>
       </div>
