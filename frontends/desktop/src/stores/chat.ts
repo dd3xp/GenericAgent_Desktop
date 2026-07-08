@@ -90,7 +90,17 @@ export const useChatStore = create<ChatState>((set, get) => {
         if (result.model) {
           useSettingsStore.getState().setLiveModel(result.model);
         }
-        if (result.status !== 'running') stopPolling();
+        if (result.status !== 'running') {
+          stopPolling();
+          // Poll detected idle — drain queue (covers missed WS events)
+          // Guard: only drain if status is still idle (prevents double-send)
+          const { pendingQueue, status: cur } = get();
+          if (cur === 'idle' && pendingQueue.length > 0) {
+            const [next, ...rest] = pendingQueue;
+            set({ pendingQueue: rest });
+            get().sendMessage(next.text, next.opts);
+          }
+        }
       }).catch(() => {});
     }, POLL_INTERVAL_MS);
   }
@@ -144,20 +154,23 @@ export const useChatStore = create<ChatState>((set, get) => {
 
         set({ status: 'idle', turnStartedAt: null });
         pollMessages(activeSessionId).then((result) => {
+          // Only update messages — don't overwrite status with result.status.
+          // The WS idle event is authoritative; a stale poll returning 'running'
+          // (e.g. during title-gen) would block queue drain indefinitely.
           set((s) => ({
             messages: mergeMessages(
               s.messages.filter((m) => m.id !== PARTIAL_MSG_ID),
               result.messages,
               undefined,
             ),
-            status: result.status,
           }));
           if (result.model) {
             useSettingsStore.getState().setLiveModel(result.model);
           }
-          // Drain queue: send next pending message
-          const { pendingQueue } = get();
-          if (pendingQueue.length > 0) {
+          // Drain queue — only if still idle (prevents double-send when
+          // poll-based drain already fired for the same idle transition)
+          const { pendingQueue, status: curStatus } = get();
+          if (curStatus === 'idle' && pendingQueue.length > 0) {
             const [next, ...rest] = pendingQueue;
             set({ pendingQueue: rest });
             get().sendMessage(next.text, next.opts);

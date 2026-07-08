@@ -17,11 +17,12 @@ interface Props {
   onStop: () => void;
   isGenerating: boolean;
   editorRef?: React.RefObject<RichEditorHandle | null>;
+  hideStatusStack?: boolean;
 }
 
 let fileIdCounter = 0;
 
-export function Composer({ onSend, onStop, isGenerating, editorRef: externalEditorRef }: Props) {
+export function Composer({ onSend, onStop, isGenerating, editorRef: externalEditorRef, hideStatusStack }: Props) {
   const internalEditorRef = useRef<RichEditorHandle>(null);
   const editorRef = (externalEditorRef ?? internalEditorRef) as React.RefObject<RichEditorHandle>;
   const composerRef = useRef<HTMLDivElement>(null);
@@ -69,17 +70,18 @@ export function Composer({ onSend, onStop, isGenerating, editorRef: externalEdit
             const { uploadFile } = await import('../../../services/chat');
             const serverPath = await uploadFile(file.name, dataUrl);
             setAttachments((prev) =>
-              prev.map((a) => a.id === id ? { ...a, path: serverPath, status: 'ready' as const } : a)
+              prev.map((a) => a.id === id ? { ...a, path: serverPath, status: 'ready' as const, errorMsg: undefined } : a)
             );
-          } catch {
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'upload failed';
             setAttachments((prev) =>
-              prev.map((a) => a.id === id ? { ...a, status: 'ready' as const } : a)
+              prev.map((a) => a.id === id ? { ...a, status: 'error' as const, errorMsg } : a)
             );
           }
         };
         reader.onerror = () => {
           setAttachments((prev) =>
-            prev.map((a) => a.id === id ? { ...a, status: 'ready' as const } : a)
+            prev.map((a) => a.id === id ? { ...a, status: 'error' as const, errorMsg: 'read failed' } : a)
           );
         };
         reader.readAsDataURL(file);
@@ -103,7 +105,8 @@ export function Composer({ onSend, onStop, isGenerating, editorRef: externalEdit
     const readyImages = attachments.filter((a) => a.type === 'image' && a.status === 'ready');
     const pendingImages = attachments.filter((a) => a.type === 'image' && a.status === 'uploading');
     const pendingFiles = attachments.filter((a) => a.type === 'file' && a.status === 'uploading');
-    if (pendingImages.length > 0 || pendingFiles.length > 0) return;
+    const errorFiles = attachments.filter((a) => a.status === 'error');
+    if (pendingImages.length > 0 || pendingFiles.length > 0 || errorFiles.length > 0) return;
     const opts: SendOptions = {};
     const files = attachments.filter((a) => a.type === 'file');
     if (files.length > 0) {
@@ -228,7 +231,7 @@ export function Composer({ onSend, onStop, isGenerating, editorRef: externalEdit
   }, [processFiles]);
 
   const hasContent = plainText.trim().length > 0 || attachments.length > 0;
-  const hasPendingUploads = attachments.some((a) => a.type === 'image' && a.status === 'uploading');
+  const hasPendingUploads = attachments.some((a) => a.status === 'uploading');
   const ctaState = computeCTAState(isGenerating, hasContent, hasPendingUploads);
 
   return (
@@ -241,7 +244,7 @@ export function Composer({ onSend, onStop, isGenerating, editorRef: externalEdit
     >
       {isDragOver && <div data-slot="composer-drop-overlay">Drop files here</div>}
       <div data-slot="composer-surface">
-        <StatusStack />
+        {!hideStatusStack && <StatusStack />}
         <AttachmentStrip files={attachments} onRemove={handleRemoveAttachment} />
         <CompletionDrawer
           visible={slashQuery !== null}

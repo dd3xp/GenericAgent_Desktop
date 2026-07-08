@@ -26,6 +26,7 @@ export function CollabComposer() {
         onSend={handleSend}
         onStop={handleStop}
         isGenerating={conductorTyping}
+        hideStatusStack
       />
     </div>
   );
