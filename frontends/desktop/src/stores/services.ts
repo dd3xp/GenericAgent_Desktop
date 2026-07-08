@@ -55,7 +55,8 @@ export const useServicesStore = create<ServicesState>((set, get) => {
     mykeyLoading: false,
 
     async fetchServices() {
-      set({ loading: true, error: null });
+      if (get().services.length === 0) set({ loading: true });
+      set({ error: null });
       try {
         const services = await fetchServicesPanel();
         set({ services, loading: false });

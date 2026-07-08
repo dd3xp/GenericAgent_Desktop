@@ -36,7 +36,7 @@ WS API (state sync):
 """
 from __future__ import annotations
 
-import asyncio, atexit, contextlib, importlib, json, os, re, shutil, subprocess, sys
+import asyncio, atexit, contextlib, copy, importlib, json, os, re, shutil, subprocess, sys
 from collections import Counter, deque
 import threading, time, traceback, uuid
 from dataclasses import dataclass, field
@@ -183,9 +183,12 @@ class AgentManager:
             self._sessions_dir.mkdir(parents=True, exist_ok=True)
             with self.lock:
                 data = self._session_dict(s)
+                data["messages"] = copy.deepcopy(data["messages"])
+                if data.get("llm_history"):
+                    data["llm_history"] = copy.deepcopy(data["llm_history"])
             tmp = self._sessions_dir / f"{s.id}.json.tmp"
             tmp.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
-            os.replace(tmp, self._session_file(s.id))  # atomic swap
+            os.replace(tmp, self._session_file(s.id))
         except Exception as e:
             print(f"[bridge] persist session {s.id} failed: {e}", file=sys.stderr)
 
@@ -1059,8 +1062,19 @@ def discover_extra_services(ga_root: Path) -> List[dict]:
         out.append({
             "id": "frontends/conductor.py",
             "cmd": [sys.executable, "frontends/conductor.py", "--no-browser"],
+            "port": 8900,
         })
     return out
+
+
+def _port_alive(port: Optional[int]) -> bool:
+    """Check if something is listening on localhost:port."""
+    if not port:
+        return False
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def _mem_mb(pid: Optional[int]) -> Optional[int]:
@@ -1184,9 +1198,12 @@ class ServiceManager:
         last_warning = ""
         warning_key = ""
         scan = self._scan_errors(sid)
+        catalog_port = self._catalog.get(sid, {}).get("port")
         if proc is not None and proc.poll() is not None:
             if sid in self._stopping:
                 status, last_error = "offline", ""
+            elif _port_alive(catalog_port):
+                status, running = "running", True
             else:
                 status = "error"
                 if scan["fatal"]:
@@ -1196,6 +1213,8 @@ class ServiceManager:
                     last_error = err
                 else:
                     last_error = f"exit code {proc.returncode}"
+        elif not running and not err and _port_alive(catalog_port):
+            status, running = "running", True
         elif running:
             if scan["warning"]:
                 last_warning = scan["warning"][0]

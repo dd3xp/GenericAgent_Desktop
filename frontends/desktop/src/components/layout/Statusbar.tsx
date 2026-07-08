@@ -1,7 +1,6 @@
 import { useState, useCallback, type ReactNode } from 'react';
 import { useChatStore } from '../../stores/chat';
 import { useConductorStore } from '../../stores/conductor';
-import { useServicesStore } from '../../stores/services';
 import { useTokenStore } from '../../stores/token';
 import { useBridgeStatus } from '../../hooks/useBridgeStatus';
 import { LiveDuration } from './LiveDuration';
@@ -88,7 +87,6 @@ export function Statusbar() {
   const [conductorPanelOpen, setConductorPanelOpen] = useState(false);
 
   const bridgeStatus = useBridgeStatus();
-  const services = useServicesStore((s) => s.services);
   const conductorStatus = useConductorStore((s) => s.connectionStatus);
   const snapshot = useTokenStore((s) => s.snapshot);
   const conductorSnapshot = useTokenStore((s) => s.conductorSnapshot);
@@ -98,32 +96,19 @@ export function Statusbar() {
   const toggleConductorPanel = useCallback(() => { setConductorPanelOpen((v) => !v); setPanelOpen(false); }, []);
   const closeConductorPanel = useCallback(() => setConductorPanelOpen(false), []);
 
-  const conductorService = services.find((s) => s.id === 'frontends/conductor.py');
-  const bridgeServices = services.filter((s) => s.id !== 'frontends/conductor.py');
+  // Bridge dot: sole source of truth is WS channel health — NOT service-level errors.
+  const bridgeDot: DotStatus = bridgeStatus === 'ready' ? 'ready'
+    : bridgeStatus === 'connecting' ? 'connecting'
+    : 'offline';
+  const bridgeDetail = bridgeStatus === 'ready' ? undefined
+    : bridgeStatus === 'connecting' ? 'connecting' : 'offline';
 
-  // Derive bridge dot status: if WS is ready, check bridge-managed service errors only.
-  const erroredBridgeServices = bridgeServices.filter((s) => s.status === 'error');
-  const erroredBridgeCount = erroredBridgeServices.length;
-  const bridgeDot: DotStatus = bridgeStatus === 'ready'
-    ? (erroredBridgeCount > 0 ? 'degraded' : 'ready')
-    : bridgeStatus;
-
-  const bridgeDetail = bridgeStatus === 'ready'
-    ? (erroredBridgeCount > 0
-      ? `${erroredBridgeCount}/${bridgeServices.length} err: ${(erroredBridgeServices[0]?.name ?? erroredBridgeServices[0]?.id ?? 'service').split('/').pop()}`
-      : undefined)
-    : (bridgeStatus === 'connecting' ? 'connecting' : 'offline');
-
-  // Conductor dot/detail: prioritize conductor service process error over WS state.
-  const conductorDot: DotStatus = conductorService?.status === 'error' ? 'error'
-    : conductorStatus === 'ready' ? 'ready'
+  // Conductor dot: sole source of truth is conductor WS connection state.
+  const conductorDot: DotStatus = conductorStatus === 'ready' ? 'ready'
     : conductorStatus === 'error' ? 'error'
     : conductorStatus === 'connecting' ? 'connecting'
     : 'offline';
-
-  const conductorDetail = conductorService?.status === 'error'
-    ? (conductorService.lastError || 'service error')
-    : conductorStatus === 'ready' ? undefined : conductorStatus;
+  const conductorDetail = conductorStatus === 'ready' ? undefined : conductorStatus;
 
   // Total tokens (bridge + conductor)
   const totalTokens = snapshot.totalInput + snapshot.totalOutput
