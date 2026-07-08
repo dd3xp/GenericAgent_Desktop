@@ -110,7 +110,7 @@ export const RichEditorInput = forwardRef<RichEditorHandle, Props>(function Rich
   }, [handleInput]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (isComposingRef.current) return;
+    if (isComposingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
     onKeyDown(e);
   }, [onKeyDown]);
 

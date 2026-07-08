@@ -83,8 +83,7 @@ export const ApprovalPart = memo(function ApprovalPart({ question, candidates }:
   }, []);
 
   const handleOtherKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // IME composing guard
-    if (e.nativeEvent.isComposing) return;
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       const trimmed = draft.trim();

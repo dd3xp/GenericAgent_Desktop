@@ -82,8 +82,9 @@ export function TokenTable({ dataSource, loading: loadingProp }: Props) {
       const [from, to] = dateRange;
       if (from || to) {
         entries = entries.filter((entry) => {
-          if (from && entry.ts < from.getTime()) return false;
-          if (to && entry.ts > to.getTime()) return false;
+          const ts = entry.ts < 1e12 ? entry.ts * 1000 : entry.ts;
+          if (from && ts < from.getTime()) return false;
+          if (to && ts > to.getTime()) return false;
           return true;
         });
       }

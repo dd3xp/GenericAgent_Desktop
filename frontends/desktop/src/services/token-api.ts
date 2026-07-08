@@ -44,17 +44,20 @@ export async function fetchTokenHistory(): Promise<TokenHistoryResponse> {
   const data = await res.json();
 
   const rawHistory: Array<Record<string, unknown>> = data.history ?? [];
-  const history: HistoryEntry[] = rawHistory.map((r) => ({
-    id: String(r.sessionId ?? r.id ?? ''),
-    title: String(r.title ?? ''),
-    input: Number(r.input ?? 0),
-    output: Number(r.output ?? 0),
-    cacheWrite: Number(r.cacheCreate ?? r.cacheWrite ?? 0),
-    cacheRead: Number(r.cacheRead ?? 0),
-    model: String(r.model ?? ''),
-    ts: Number(r.ts ?? 0),
-    deleted: r.deleted as boolean | undefined,
-  }));
+  const history: HistoryEntry[] = rawHistory.map((r) => {
+    const rawTs = Number(r.ts ?? 0);
+    return {
+      id: String(r.sessionId ?? r.id ?? ''),
+      title: String(r.title ?? ''),
+      input: Number(r.input ?? 0),
+      output: Number(r.output ?? 0),
+      cacheWrite: Number(r.cacheCreate ?? r.cacheWrite ?? 0),
+      cacheRead: Number(r.cacheRead ?? 0),
+      model: String(r.model ?? ''),
+      ts: rawTs < 1e12 ? rawTs * 1000 : rawTs,
+      deleted: r.deleted as boolean | undefined,
+    };
+  });
 
   // Backend snap is a per-session dict; aggregate into a single snapshot
   const rawSnap: Record<string, Record<string, number>> = data.snap ?? {};
