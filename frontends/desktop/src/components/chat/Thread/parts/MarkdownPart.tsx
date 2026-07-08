@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useDeferredValue } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -6,7 +6,10 @@ import rehypeKatex from 'rehype-katex';
 import type { Components } from 'react-markdown';
 import 'katex/dist/katex.min.css';
 import { CodeBlock } from './CodeBlock';
+import { SafeMathBlock } from './SafeMath';
+import { HugeTextFallback } from './HugeTextFallback';
 import { useSmoothReveal } from '../../../../hooks/useSmoothReveal';
+import { preprocessMarkdown } from '../../../../lib/markdown-preprocess';
 
 const KATEX_OPTIONS = {
   macros: {
@@ -23,15 +26,12 @@ const KATEX_OPTIONS = {
   trust: true,
 };
 
+/** Messages longer than this threshold skip ReactMarkdown entirely. */
+const MAX_MARKDOWN_CHARS = 150_000;
+
 interface Props {
   content: string;
   isStreaming?: boolean;
-}
-
-function normalizeLatexDelimiters(text: string): string {
-  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, expr) => `$$${expr}$$`);
-  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, expr) => `$${expr}$`);
-  return text;
 }
 
 function makeComponents(isStreaming: boolean): Components {
@@ -43,6 +43,11 @@ function makeComponents(isStreaming: boolean): Components {
       const match = /language-(\w+)/.exec(className || '');
       const code = String(children).replace(/\n$/, '');
       if (match) {
+        // Route ```math fences to SafeMathBlock (display math with fallback).
+        // ```latex and ```tex go through normal code highlighting.
+        if (match[1] === 'math') {
+          return <SafeMathBlock expr={code} />;
+        }
         return <CodeBlock language={match[1]} code={code} isStreaming={isStreaming} />;
       }
       if (code.includes('\n')) {
@@ -64,6 +69,18 @@ export const MarkdownPart = memo(function MarkdownPart({ content, isStreaming = 
   const components = useMemo(() => makeComponents(isStreaming), [isStreaming]);
   const revealed = useSmoothReveal(content, isStreaming);
 
+  // Wrap in useDeferredValue so streaming markdown parsing doesn't block UI updates.
+  const deferredText = useDeferredValue(revealed);
+
+  // For extremely long messages, skip markdown rendering entirely.
+  if (deferredText.length > MAX_MARKDOWN_CHARS) {
+    return (
+      <div data-slot="aui_markdown-part">
+        <HugeTextFallback text={deferredText} />
+      </div>
+    );
+  }
+
   return (
     <div data-slot="aui_markdown-part">
       <ReactMarkdown
@@ -71,7 +88,7 @@ export const MarkdownPart = memo(function MarkdownPart({ content, isStreaming = 
         rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}
         components={components}
       >
-        {normalizeLatexDelimiters(revealed)}
+        {preprocessMarkdown(deferredText)}
       </ReactMarkdown>
     </div>
   );

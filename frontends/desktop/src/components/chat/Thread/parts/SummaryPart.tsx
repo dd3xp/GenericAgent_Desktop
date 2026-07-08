@@ -3,15 +3,15 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { preprocessMarkdown } from '../../../../lib/markdown-preprocess';
+
+const KATEX_OPTIONS = {
+  strict: 'ignore' as const,
+  trust: true,
+};
 
 interface Props {
   content: string;
-}
-
-function normalizeLatexDelimiters(text: string): string {
-  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, expr) => `$$${expr}$$`);
-  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, expr) => `$${expr}$`);
-  return text;
 }
 
 export const SummaryPart = memo(function SummaryPart({ content }: Props) {
@@ -19,9 +19,9 @@ export const SummaryPart = memo(function SummaryPart({ content }: Props) {
     <div data-slot="summary-block">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}
       >
-        {normalizeLatexDelimiters(content)}
+        {preprocessMarkdown(content)}
       </ReactMarkdown>
     </div>
   );
