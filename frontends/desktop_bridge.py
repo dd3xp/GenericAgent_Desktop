@@ -46,6 +46,23 @@ from aiohttp import web, WSMsgType
 
 APP_DIR = Path(__file__).resolve().parent
 
+# ─── Bridge self-log ring buffer ───
+import datetime as _dt, io as _io
+
+_bridge_log: deque = deque(maxlen=500)
+
+
+def bridge_print(*args, **kwargs):
+    """Print to stderr AND capture into bridge ring buffer (timestamped)."""
+    kwargs.pop("file", None)
+    buf = _io.StringIO()
+    print(*args, file=buf, **kwargs)
+    text = buf.getvalue().rstrip("\n")
+    ts = _dt.datetime.now().strftime("%H:%M:%S")
+    for line in text.split("\n"):
+        _bridge_log.append(f"[{ts}] {line}")
+    print(*args, file=sys.stderr, **kwargs)
+
 
 def find_default_ga_root() -> Path:
     candidates = [
@@ -190,7 +207,7 @@ class AgentManager:
             tmp.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
             os.replace(tmp, self._session_file(s.id))
         except Exception as e:
-            print(f"[bridge] persist session {s.id} failed: {e}", file=sys.stderr)
+            bridge_print(f"[bridge] persist session {s.id} failed: {e}")
 
     def _delete_session_file(self, sid: str):
         try:
@@ -198,7 +215,7 @@ class AgentManager:
             if f.exists():
                 f.unlink()
         except Exception as e:
-            print(f"[bridge] delete session file {sid} failed: {e}", file=sys.stderr)
+            bridge_print(f"[bridge] delete session file {sid} failed: {e}")
 
     def _persist(self):
         """Write every session (one file each). Used for bulk ops (import) / full flush."""
@@ -233,9 +250,9 @@ class AgentManager:
                         sess = self._session_from_item(item)
                         self.sessions[sess.id] = sess
                     except Exception as e:
-                        print(f"[bridge] load session {f.name} failed: {e}", file=sys.stderr)
+                        bridge_print(f"[bridge] load session {f.name} failed: {e}")
         except Exception as e:
-            print(f"[bridge] load sessions dir failed: {e}", file=sys.stderr)
+            bridge_print(f"[bridge] load sessions dir failed: {e}")
 
         # One-time migration from the legacy monolithic desktop_sessions.json.
         try:
@@ -249,13 +266,13 @@ class AgentManager:
                         self.sessions[sess.id] = sess
                         self._persist_session(sess)
                     except Exception as e:
-                        print(f"[bridge] migrate session failed: {e}", file=sys.stderr)
+                        bridge_print(f"[bridge] migrate session failed: {e}")
                 # Retire the legacy file so we do not migrate again next launch.
                 with contextlib.suppress(Exception):
                     self._sessions_file.rename(
                         self._sessions_file.parent / (self._sessions_file.name + ".migrated"))
         except Exception as e:
-            print(f"[bridge] migrate sessions failed: {e}", file=sys.stderr)
+            bridge_print(f"[bridge] migrate sessions failed: {e}")
 
         if self.sessions:
             self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
@@ -452,7 +469,7 @@ class AgentManager:
                 llmcore._mykey_mtime = None   # 让本次 reload_mykeys() 视为“已变更”，触发真正重建
                 fn()
             except Exception as e:
-                print(f"[bridge] reload live agent failed: {e}", file=sys.stderr)
+                bridge_print(f"[bridge] reload live agent failed: {e}")
 
     def add_model_profile(self, data: dict) -> dict:
         cfg = self._build_cfg(data)
@@ -545,7 +562,7 @@ class AgentManager:
         try:
             keys, mk = self._mykey_vars()
         except Exception as e:
-            print(f"get model profiles failed: {e}", file=sys.stderr)
+            bridge_print(f"get model profiles failed: {e}")
             return []
         # A profile can be referenced by any mixin channel, not only the first one.
         # Keep each mixin row's own members for display, but mark native profiles as
@@ -891,6 +908,7 @@ class AgentManager:
                 sess.status = "error"
                 sess.last_error = str(e)
                 self.add_message(sess, "error", str(e))
+            bridge_print(f"[turn] error: {e}")
             print(tb, file=sys.stderr)
             emit_session_state(sess, "error")
 
@@ -963,7 +981,7 @@ class AgentManager:
             try:
                 agent.llmclient.backend.history = sess.llm_history
             except Exception as e:
-                print(f"[bridge] restore llm_history failed: {e}", file=sys.stderr)
+                bridge_print(f"[bridge] restore llm_history failed: {e}")
         else:
             history = []
             for m in sess.messages:
@@ -977,7 +995,7 @@ class AgentManager:
                 try:
                     agent.llmclient.backend.history = history
                 except Exception as e:
-                    print(f"[bridge] inject history failed: {e}", file=sys.stderr)
+                    bridge_print(f"[bridge] inject history failed: {e}")
         with self.lock:
             sess.agent = agent
             sess.status = "idle"
@@ -1370,7 +1388,7 @@ class ServiceManager:
                 tag = "ok" if res.get("ok") else f"fail: {res.get('error')}"
             except Exception as e:
                 tag = f"exception {type(e).__name__}: {e}"
-            print(f"[autostart] {sid}: {tag}", file=sys.stderr)
+            bridge_print(f"[autostart] {sid}: {tag}")
 
     def stop_all_extras(self) -> None:
         for sid in sorted(set(self._catalog) - set(self._im_catalog)):
@@ -1406,7 +1424,7 @@ class ServiceManager:
                 tag = "ok" if res.get("ok") else f"fail: {res.get('error')}"
             except Exception as e:
                 tag = f"exception {type(e).__name__}: {e}"
-            print(f"[restart-broken] {sid}: {tag}", file=sys.stderr)
+            bridge_print(f"[restart-broken] {sid}: {tag}")
 
     def stop_service(self, sid: str) -> dict:
         if sid not in self._catalog:
@@ -1424,7 +1442,11 @@ class ServiceManager:
 
     def read_logs(self, sid: str, tail: int = 200) -> dict:
         if sid == BRIDGE_ID:
-            return {"ok": True, "lines": [f"GenericAgent bridge pid={os.getpid()}"]}
+            tail = max(1, min(int(tail or 200), 2000))
+            lines = list(_bridge_log)[-tail:]
+            if not lines:
+                lines = [f"GenericAgent bridge pid={os.getpid()}"]
+            return {"ok": True, "lines": lines}
         if sid not in self._catalog:
             raise KeyError(sid)
         tail = max(1, min(int(tail or 200), 2000))
@@ -1591,7 +1613,7 @@ async def save_config_handler(request):
                 doc["ui"] = ui
                 _write_settings_doc(doc)
             except Exception as e:
-                print(f"[bridge] save ui prefs failed: {e}", file=sys.stderr)
+                bridge_print(f"[bridge] save ui prefs failed: {e}")
         manager.config.update(cfg)
     return json_ok({"ok": True, "gaRoot": manager.ga_root, "mykeyPath": manager.mykey_path, "config": manager.config})
 
@@ -2276,5 +2298,5 @@ def create_app():
 if __name__ == "__main__":
     host = os.environ.get("BRIDGE_HOST", "127.0.0.1")
     port = int(os.environ.get("BRIDGE_PORT", "14168"))
-    print(f"GenericAgent Web2 bridge: http://{host}:{port}  ws://{host}:{port}/ws", file=sys.stderr)
+    bridge_print(f"GenericAgent Web2 bridge: http://{host}:{port}  ws://{host}:{port}/ws")
     web.run_app(create_app(), host=host, port=port, print=None)
