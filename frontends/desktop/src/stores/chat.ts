@@ -43,6 +43,9 @@ let rafId: number | null = null;
 // Fallback polling state
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+// Per-session turn start timestamps — persists across session switches
+const turnStartMap = new Map<string, number>();
+
 export const useChatStore = create<ChatState>((set, get) => {
   function mergeMessages(current: Message[], incoming: Message[], partial?: Message): Message[] {
     const withoutPartial = current.filter((m) => m.id !== PARTIAL_MSG_ID);
@@ -64,6 +67,32 @@ export const useChatStore = create<ChatState>((set, get) => {
       merged.push({ ...partial, id: PARTIAL_MSG_ID, status: 'in_progress' });
     }
     return merged;
+  }
+
+  function inferTurnStart(messages: Message[]): number {
+    // Find the last user message's createdAt as the best approximation of turn start
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user' && messages[i].createdAt) {
+        return messages[i].createdAt!;
+      }
+    }
+    return Date.now();
+  }
+
+  function setTurnStart(sessionId: string, ts: number) {
+    turnStartMap.set(sessionId, ts);
+    const { activeSessionId } = get();
+    if (sessionId === activeSessionId) {
+      set({ turnStartedAt: ts });
+    }
+  }
+
+  function clearTurnStart(sessionId: string) {
+    turnStartMap.delete(sessionId);
+    const { activeSessionId } = get();
+    if (sessionId === activeSessionId) {
+      set({ turnStartedAt: null });
+    }
   }
 
   function flushPartial() {
@@ -91,9 +120,8 @@ export const useChatStore = create<ChatState>((set, get) => {
           useSettingsStore.getState().setLiveModel(result.model);
         }
         if (result.status !== 'running') {
+          clearTurnStart(activeSessionId);
           stopPolling();
-          // Poll detected idle — drain queue (covers missed WS events)
-          // Guard: only drain if status is still idle (prevents double-send)
           const { pendingQueue, status: cur } = get();
           if (cur === 'idle' && pendingQueue.length > 0) {
             const [next, ...rest] = pendingQueue;
@@ -145,18 +173,22 @@ export const useChatStore = create<ChatState>((set, get) => {
     const { activeSessionId } = get();
     if (evt.sessionId && evt.sessionId === activeSessionId) {
       if (evt.status === 'running') {
-        set({ status: 'running', turnStartedAt: get().turnStartedAt ?? Date.now() });
+        // Only record start time if not already tracked
+        if (!turnStartMap.has(evt.sessionId)) {
+          setTurnStart(evt.sessionId, Date.now());
+        } else {
+          set({ turnStartedAt: turnStartMap.get(evt.sessionId)! });
+        }
+        set({ status: 'running' });
         startPolling();
       } else if (evt.status === 'idle' || evt.status === 'error' || evt.status === 'cancelled') {
         stopPolling();
         if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
         pendingPartial = null;
 
-        set({ status: 'idle', turnStartedAt: null });
+        clearTurnStart(evt.sessionId);
+        set({ status: 'idle' });
         pollMessages(activeSessionId).then((result) => {
-          // Only update messages — don't overwrite status with result.status.
-          // The WS idle event is authoritative; a stale poll returning 'running'
-          // (e.g. during title-gen) would block queue drain indefinitely.
           set((s) => ({
             messages: mergeMessages(
               s.messages.filter((m) => m.id !== PARTIAL_MSG_ID),
@@ -167,8 +199,6 @@ export const useChatStore = create<ChatState>((set, get) => {
           if (result.model) {
             useSettingsStore.getState().setLiveModel(result.model);
           }
-          // Drain queue — only if still idle (prevents double-send when
-          // poll-based drain already fired for the same idle transition)
           const { pendingQueue, status: curStatus } = get();
           if (curStatus === 'idle' && pendingQueue.length > 0) {
             const [next, ...rest] = pendingQueue;
@@ -176,6 +206,14 @@ export const useChatStore = create<ChatState>((set, get) => {
             get().sendMessage(next.text, next.opts);
           }
         }).catch(() => {});
+      }
+    }
+    // Handle non-active session turn end — clean up map
+    if (evt.sessionId && evt.sessionId !== activeSessionId) {
+      if (evt.status === 'idle' || evt.status === 'error' || evt.status === 'cancelled') {
+        turnStartMap.delete(evt.sessionId);
+      } else if (evt.status === 'running' && !turnStartMap.has(evt.sessionId)) {
+        turnStartMap.set(evt.sessionId, Date.now());
       }
     }
     if (evt.status === 'idle' || evt.status === 'error') {
@@ -205,7 +243,6 @@ export const useChatStore = create<ChatState>((set, get) => {
         set({ activeSessionId });
         get().loadSessions();
       }
-      // If agent is running, enqueue instead of sending
       if (status === 'running') {
         set((s) => ({ pendingQueue: [...s.pendingQueue, { text, opts }] }));
         return;
@@ -214,7 +251,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       const localImages = opts?.images?.map((f) => ({ name: f.name, path: f.base64 || f.path || f.name }));
       const localFiles = opts?.files;
       const userMsg: Message = { id: `local-${now}`, role: 'user', content: text, status: 'completed', createdAt: now, images: localImages, files: localFiles };
-      set((s) => ({ messages: [...s.messages, userMsg], status: 'running', turnStartedAt: now }));
+      set((s) => ({ messages: [...s.messages, userMsg], status: 'running' }));
+      setTurnStart(activeSessionId, now);
       startPolling();
       const llmNo = useSettingsStore.getState().selectedModelNo;
       await sendPrompt(activeSessionId, text, llmNo, opts?.files, opts?.images);
@@ -232,16 +270,25 @@ export const useChatStore = create<ChatState>((set, get) => {
 
     setActiveSession(id: string | null) {
       stopPolling();
-      set({ activeSessionId: id, messages: [], status: 'idle', turnStartedAt: null, pendingQueue: [] });
+      // Restore turnStartedAt from map if switching to a running session
+      const restoredTs = id ? turnStartMap.get(id) ?? null : null;
+      set({ activeSessionId: id, messages: [], status: 'idle', turnStartedAt: restoredTs, pendingQueue: [] });
       if (id) {
         pollMessages(id).then((result) => {
-          set({
-            messages: mergeMessages([], result.messages, result.partial),
-            status: result.status,
-          });
+          const merged = mergeMessages([], result.messages, result.partial);
+          set({ messages: merged, status: result.status });
           if (result.status === 'running') {
-            set({ turnStartedAt: Date.now() });
+            // Use existing map entry, or infer from last user message
+            if (!turnStartMap.has(id)) {
+              const inferred = inferTurnStart(result.messages);
+              setTurnStart(id, inferred);
+            } else {
+              set({ turnStartedAt: turnStartMap.get(id)! });
+            }
             startPolling();
+          } else {
+            turnStartMap.delete(id);
+            set({ turnStartedAt: null });
           }
         }).catch(() => {});
       }
@@ -259,6 +306,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       if (activeSessionId === id) {
         set({ activeSessionId: null, messages: [], status: 'idle', turnStartedAt: null });
       }
+      turnStartMap.delete(id);
       set((s) => ({ sessions: s.sessions.filter((ss) => ss.id !== id) }));
       try { await apiDeleteSession(id); } catch {}
     },
