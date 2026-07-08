@@ -23,6 +23,7 @@
         "maximized": true,
         "visible": false,
         "titleBarStyle": "overlay",
+        "dragDropEnabled": false,
         "url": "loading.html"
       },
       {
