@@ -163,3 +163,107 @@ class TestSessionFiltering:
         sessions = [{"id": "tui_x"}, {"id": "tui_y"}]
         filtered = [s for s in sessions if not s["id"].startswith("tui_")]
         assert len(filtered) == 0
+
+
+class TestRunAgentTurnScope:
+    """Guard tests: run_agent_turn must NOT reference variables from submit_prompt's scope.
+
+    These tests parse the actual bridge source to catch NameError regressions
+    (e.g. referencing 'sid' inside run_agent_turn which runs in a different thread).
+    """
+
+    @staticmethod
+    def _get_bridge_source() -> str:
+        from pathlib import Path
+        candidates = [
+            Path(__file__).parent.parent / "desktop_bridge.py",
+            Path(__file__).parent.parent.parent / "frontends" / "desktop_bridge.py",
+        ]
+        for p in candidates:
+            if p.exists():
+                return p.read_text(encoding="utf-8")
+        raise FileNotFoundError("desktop_bridge.py not found")
+
+    @staticmethod
+    def _extract_method_body(source: str, method_name: str) -> str:
+        """Extract a method body from source (indentation-based)."""
+        import re
+        pattern = rf"^\s+def {method_name}\(self.*?:\n"
+        match = re.search(pattern, source, re.MULTILINE)
+        if not match:
+            return ""
+        start = match.end()
+        lines = source[start:].split("\n")
+        body_lines = []
+        base_indent = None
+        for line in lines:
+            if not line.strip():
+                body_lines.append(line)
+                continue
+            indent = len(line) - len(line.lstrip())
+            if base_indent is None:
+                base_indent = indent
+            if indent < base_indent and line.strip():
+                break
+            body_lines.append(line)
+        return "\n".join(body_lines)
+
+    def test_run_agent_turn_does_not_reference_bare_sid(self):
+        """run_agent_turn must use sess.id, never bare 'sid' (which is out of scope)."""
+        import re
+        source = self._get_bridge_source()
+        body = self._extract_method_body(source, "run_agent_turn")
+        assert body, "Could not extract run_agent_turn body"
+        # Find bare 'sid' references that are NOT part of 'sess.id' or string literals
+        bare_sid_refs = re.findall(r'(?<!\.)(?<!\w)sid(?!\w)(?!.*#.*sid)', body)
+        # Filter out string contents (inside quotes)
+        real_refs = []
+        for match in re.finditer(r'(?<!\.)(?<!\w)sid(?!\w)', body):
+            pos = match.start()
+            # Check we're not inside a string
+            before = body[:pos]
+            single_q = before.count("'") % 2
+            double_q = before.count('"') % 2
+            if not single_q and not double_q:
+                real_refs.append(match.group())
+        assert len(real_refs) == 0, (
+            f"run_agent_turn references bare 'sid' {len(real_refs)} time(s). "
+            f"Use 'sess.id' instead — 'sid' is only defined in submit_prompt's scope."
+        )
+
+    def test_patch_chat_for_images_exists(self):
+        """_patch_chat_for_images must exist in bridge — it's the image injection path."""
+        source = self._get_bridge_source()
+        assert "_patch_chat_for_images" in source, (
+            "_patch_chat_for_images method missing from desktop_bridge.py — "
+            "image uploads will silently fail (agent won't see images)"
+        )
+
+    def test_submit_prompt_separates_agent_prompt_from_stored_message(self):
+        """submit_prompt must store clean prompt in message but pass paths to agent."""
+        source = self._get_bridge_source()
+        body = self._extract_method_body(source, "submit_prompt")
+        assert body, "Could not extract submit_prompt body"
+        # Must have agent_prompt as a separate variable
+        assert "agent_prompt" in body, (
+            "submit_prompt must use 'agent_prompt' (with paths) separate from 'prompt' "
+            "(clean, stored in message). Otherwise UI shows raw paths to user."
+        )
+        # add_message must use the clean prompt, not agent_prompt
+        import re
+        add_msg_call = re.search(r'add_message\(.*?,\s*"user",\s*(\w+)', body)
+        assert add_msg_call, "add_message call not found in submit_prompt"
+        arg = add_msg_call.group(1)
+        assert arg == "prompt", (
+            f"add_message stores '{arg}' but should store 'prompt' (clean text). "
+            f"agent_prompt (with file paths) goes only to run_agent_turn."
+        )
+
+    def test_image_paths_passed_to_run_agent_turn(self):
+        """submit_prompt must extract image_paths and pass to run_agent_turn thread."""
+        source = self._get_bridge_source()
+        body = self._extract_method_body(source, "submit_prompt")
+        assert "image_paths" in body, (
+            "submit_prompt must extract image_paths from image_metas and pass to "
+            "run_agent_turn. Without this, _patch_chat_for_images receives None."
+        )

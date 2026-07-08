@@ -51,7 +51,7 @@ export function Composer({ onSend, onStop, isGenerating, editorRef: externalEdit
     const newFiles: AttachmentFile[] = [];
     for (const file of Array.from(fileList)) {
       const id = `att-${++fileIdCounter}`;
-      const isImage = file.type.startsWith('image/');
+      const isImage = file.type.startsWith('image/') && file.type !== 'image/svg+xml';
       const tooLarge = file.size > MAX_SIZE;
       if (isImage && !tooLarge) {
         const reader = new FileReader();

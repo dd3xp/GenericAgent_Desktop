@@ -121,7 +121,7 @@ export const RichEditorInput = forwardRef<RichEditorHandle, Props>(function Rich
     // Check for images
     const imageFiles: File[] = [];
     for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
+      if (item.type.startsWith('image/') && item.type !== 'image/svg+xml') {
         const file = item.getAsFile();
         if (file) imageFiles.push(file);
       }

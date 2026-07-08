@@ -714,6 +714,12 @@ class AgentManager:
 
     def submit_prompt(self, sid: str, prompt: Any, images: Optional[list] = None, display: Optional[str] = None, files_meta: Optional[list] = None, image_metas: Optional[list] = None) -> dict:
         prompt, image_ids = normalize_prompt(prompt, images)
+        # Build agent_prompt with file paths prepended (agent sees paths, UI sees clean text)
+        agent_prompt = prompt
+        if files_meta:
+            paths = [m["path"] for m in files_meta if m.get("path")]
+            if paths:
+                agent_prompt = " ".join(paths) + "\n" + prompt
         with self.lock:
             sess = self.sessions.get(sid)
             if not sess:
@@ -734,13 +740,53 @@ class AgentManager:
             sess.cancel_requested = False
             sess.last_error = ""
             sess.partial = {"id": sess.msg_seq + 1, "role": "assistant", "content": "", "ts": time.time(), "partial": True,
-                            "curr_turn": 0, "turn_segs": []}  # turn_segs[i]=第i轮全文(权威结构化,前端按轮渲染);content保留双轨兜底
-            t = threading.Thread(target=self.run_agent_turn, args=(sess, prompt, None), daemon=True, name=f"Turn-{sid}")
+                            "curr_turn": 0, "turn_segs": []}  # turn_segs[i]=第i轮全文(权威结构化,前端按轮渲染);content保留双轮兜底
+            image_paths = [m["path"] for m in (image_metas or []) if m.get("path")]
+            t = threading.Thread(target=self.run_agent_turn, args=(sess, agent_prompt, image_paths or None), daemon=True, name=f"Turn-{sid}")
             sess.thread = t
             t.start()
             seq = sess.msg_seq
         emit_session_state(sess, "running")
         return {"ok": True, "sessionId": sid, "accepted": True, "userMessageId": user_msg["id"], "seq": seq}
+
+    @staticmethod
+    def _patch_chat_for_images(client, image_paths):
+        """Monkey-patch backend.ask to inject base64 image blocks on the first LLM call."""
+        import base64 as b64, mimetypes
+        try:
+            from llmcore import NativeToolClient
+        except ImportError:
+            return
+        if not isinstance(client, NativeToolClient):
+            return
+        backend = client.backend
+        original_ask = backend.ask
+
+        _VISION_MIMES = {'image/png', 'image/jpeg', 'image/gif', 'image/webp'}
+
+        def patched_ask(msg):
+            try:
+                del backend.ask
+            except AttributeError:
+                backend.ask = original_ask
+            if isinstance(msg, dict) and isinstance(msg.get("content"), list):
+                for p in image_paths:
+                    try:
+                        mime = mimetypes.guess_type(p)[0] or 'image/png'
+                        if mime not in _VISION_MIMES:
+                            # Unsupported image format (e.g. SVG) — inject as text path reference
+                            msg["content"].append({"type": "text", "text": f"[attached file: {p}]"})
+                            continue
+                        with open(p, 'rb') as f:
+                            raw = f.read()
+                        data = b64.b64encode(raw).decode()
+                        msg["content"].append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}})
+                    except Exception:
+                        pass
+            resp = yield from original_ask(msg)
+            return resp
+
+        backend.ask = patched_ask
 
     def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None):
         try:
@@ -752,6 +798,8 @@ class AgentManager:
             if no is not None and hasattr(agent, "next_llm"):
                 with contextlib.suppress(Exception):
                     agent.next_llm(int(no))
+            if images:
+                self._patch_chat_for_images(agent.llmclient, images)
             full = ""
             done_outputs = None  # done时agent给的全量轮文本(turn_resps.copy())
             if hasattr(agent, "put_task"):
@@ -787,7 +835,7 @@ class AgentManager:
                                         if len(_outs) >= 2 and _idx >= 1:
                                             _segs[_idx - 1] = str(_outs[-2])
                                     # Push partial to frontend via WS for real-time streaming
-                                    hub.emit({"type": "partial-update", "sessionId": sid,
+                                    hub.emit({"type": "partial-update", "sessionId": sess.id,
                                               "content": sess.partial["content"],
                                               "turn_segs": list(_segs), "curr_turn": _idx})
                         if "done" in item:
