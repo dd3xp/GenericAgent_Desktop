@@ -279,6 +279,7 @@ export const en: Record<string, string> = {
   'err.channelNotConfigured': 'Configure this platform in mykey.py first',
   'sys.channelStarted': 'Started',
   'sys.channelStopped': 'Stopped',
+  'sys.bridgeExiting': 'Bridge exiting',
   'modal.channelLogs': 'Process logs',
   'modal.mykeyConfig': 'mykey.py',
   'sys.configSaved': 'Configuration saved',

@@ -279,6 +279,7 @@ export const zh: Record<string, string> = {
   'err.channelNotConfigured': '请先在 mykey.py 中配置该平台',
   'sys.channelStarted': '已启动',
   'sys.channelStopped': '已停止',
+  'sys.bridgeExiting': 'Bridge 正在退出',
   'modal.channelLogs': '进程日志',
   'modal.mykeyConfig': 'mykey.py 配置',
   'sys.configSaved': '配置已保存',

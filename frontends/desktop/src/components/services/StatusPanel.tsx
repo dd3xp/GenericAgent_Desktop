@@ -16,6 +16,7 @@ export function StatusPanel() {
   const loading = useServicesStore((s) => s.loading);
   const startService = useServicesStore((s) => s.startService);
   const stopService = useServicesStore((s) => s.stopService);
+  const storExitBridge = useServicesStore((s) => s.exitBridge);
   const restartService = useServicesStore((s) => s.restartService);
 
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -53,11 +54,16 @@ export function StatusPanel() {
   const handleStop = useCallback(
     (svc: ServiceInfo) =>
       withBusy(svc.id, async () => {
+        if (!svc.managed) {
+          const ok = await storExitBridge();
+          if (ok) showSuccess(t('sys.bridgeExiting'));
+          return ok;
+        }
         const ok = await stopService(svc.id);
         if (ok) showSuccess(t('sys.channelStopped'));
         return ok;
       }),
-    [stopService, t, withBusy],
+    [stopService, storExitBridge, t, withBusy],
   );
 
   const handleRestart = useCallback(

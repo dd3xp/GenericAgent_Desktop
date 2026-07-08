@@ -4,6 +4,7 @@ import {
   fetchServicesPanel,
   startServiceById,
   stopServiceById,
+  exitBridge,
   fetchServiceLogs,
   fetchMykeyContent,
   saveMykeyContent,
@@ -22,6 +23,7 @@ interface ServicesState {
   fetchServices: () => Promise<void>;
   startService: (id: string) => Promise<boolean>;
   stopService: (id: string) => Promise<boolean>;
+  exitBridge: () => Promise<boolean>;
   restartService: (id: string) => Promise<boolean>;
   fetchLogs: (id: string, tail?: number) => Promise<string[]>;
   fetchMykey: () => Promise<void>;
@@ -92,6 +94,14 @@ export const useServicesStore = create<ServicesState>((set, get) => {
           }));
         }
         return ok;
+      } catch {
+        return false;
+      }
+    },
+
+    async exitBridge() {
+      try {
+        return await exitBridge();
       } catch {
         return false;
       }

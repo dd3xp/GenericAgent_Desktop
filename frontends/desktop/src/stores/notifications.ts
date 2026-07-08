@@ -39,6 +39,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
     if (n.kind === 'info' || n.kind === 'success') {
       setTimeout(() => get().dismiss(id), 5000);
+    } else if (n.kind === 'error' || n.kind === 'warning') {
+      setTimeout(() => get().dismiss(id), 8000);
     }
   },
 

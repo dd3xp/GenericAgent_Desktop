@@ -70,3 +70,12 @@ export async function saveMykeyContent(content: string): Promise<boolean> {
   const data = await res.json();
   return data.ok ?? false;
 }
+
+export async function exitBridge(): Promise<boolean> {
+  const res = await fetch(`${BRIDGE_BASE}/services/bridge/exit`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return data.ok ?? false;
+}
