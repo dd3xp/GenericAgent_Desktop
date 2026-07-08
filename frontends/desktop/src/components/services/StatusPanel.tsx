@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Table, Tag, Button, Spin, Empty } from '@douyinfe/semi-ui';
+import { Table, Tag, Button, Spin, Empty, Tooltip } from '@douyinfe/semi-ui';
 import { IconPlay, IconStop, IconRefresh, IconFile, IconClose, IconAlertTriangle } from '@douyinfe/semi-icons';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { useI18n } from '../../i18n';
@@ -9,6 +9,12 @@ import { showError, showSuccess } from '../../utils/toast';
 import { isTauri, invokeStartBridge } from '../../utils/tauri';
 import { isChannelService } from './ChannelList';
 import { ChannelLogModal } from './ChannelLogModal';
+
+const SERVICE_META: Record<string, string> = {
+  '__bridge__': 'proc.bridge',
+  'frontends/conductor.py': 'proc.conductor',
+  'reflect/scheduler.py': 'proc.scheduler',
+};
 
 export function StatusPanel() {
   const { t } = useI18n();
@@ -128,12 +134,18 @@ export function StatusPanel() {
 
   const columns: ColumnProps<ServiceInfo>[] = [
     {
-      title: t('tok.colSession'),
+      title: t('svc.colName'),
       dataIndex: 'name',
       key: 'name',
-      render: (_text: unknown, record: ServiceInfo) => (
-        <span style={{ fontWeight: 500 }}>{record.name || record.id}</span>
-      ),
+      render: (_text: unknown, record: ServiceInfo) => {
+        const labelKey = SERVICE_META[record.id];
+        const display = labelKey ? t(labelKey) : (record.name || record.id);
+        return (
+          <Tooltip content={record.id} position="topLeft">
+            <span style={{ fontWeight: 500 }}>{display}</span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Status',
