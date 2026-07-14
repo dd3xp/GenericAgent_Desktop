@@ -763,7 +763,7 @@ fn spawn_bridge_process(python_path: &str, project_dir: &str) -> Result<(), Stri
 
 fn show_bridge_window(app_handle: &tauri::AppHandle) {
     if let Some(main_win) = app_handle.get_webview_window("main") {
-        let url = tauri::Url::parse("http://127.0.0.1:14168/").unwrap();
+        let url = tauri::Url::parse("tauri://localhost/index.html").unwrap();
         let _ = main_win.navigate(url);
         let _ = main_win.show();
         let _ = main_win.set_focus();
@@ -1067,9 +1067,9 @@ pub fn run() {
                         }
                         return;
                     }
-                    // Navigate to the bridge HTTP only after it is ready.
+                    // Navigate to the local React SPA after bridge is ready.
                     if let Some(w) = handle.get_webview_window("main") {
-                        if let Ok(url) = tauri::Url::parse("http://127.0.0.1:14168/") {
+                        if let Ok(url) = tauri::Url::parse("tauri://localhost/index.html") {
                             let _ = w.navigate(url);
                         }
                         if dev_mode {
