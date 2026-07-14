@@ -36,7 +36,7 @@ WS API (state sync):
 """
 from __future__ import annotations
 
-import asyncio, atexit, contextlib, importlib, json, os, re, subprocess, sys
+import asyncio, atexit, contextlib, importlib, json, os, re, shutil, subprocess, sys
 from collections import Counter, deque
 import threading, time, traceback, uuid
 from dataclasses import dataclass, field
@@ -47,7 +47,29 @@ from aiohttp import web, WSMsgType
 APP_DIR = Path(__file__).resolve().parent
 
 
+def _ga_root_override() -> Optional[Path]:
+    """External core dir injected by the desktop shell (design 三: bundle bridge + external核).
+    Priority: --ga-root <path> arg, then GA_ROOT env. Only honored when it holds agentmain.py;
+    an invalid/missing value returns None so we fall back to the bundle's own derivation."""
+    val = ""
+    for i, a in enumerate(sys.argv):
+        if a == "--ga-root" and i + 1 < len(sys.argv):
+            val = sys.argv[i + 1]
+        elif a.startswith("--ga-root="):
+            val = a.split("=", 1)[1]
+    if not val:
+        val = os.environ.get("GA_ROOT", "")
+    val = (val or "").strip()
+    if not val:
+        return None
+    root = Path(val).expanduser().resolve()
+    return root if (root / "agentmain.py").exists() else None
+
+
 def find_default_ga_root() -> Path:
+    override = _ga_root_override()
+    if override is not None:
+        return override
     candidates = [
         APP_DIR / "..",
         APP_DIR / ".." / "..",
@@ -64,10 +86,48 @@ def find_default_ga_root() -> Path:
 DEFAULT_GA_ROOT = find_default_ga_root()
 
 _FINAL_INFO_RE = re.compile(r'\n*`{5}\n*\[Info\] Final response to user\.\n*`{5}\s*$')
+_RUNNING_MARKER_RE = re.compile(
+    r'^\s*\*{0,2}(?:LLM Running\s*\(Turn\s*\d+\)|Turn\s*\d+)\s*\.\.\.\*{0,2}\s*$',
+    re.IGNORECASE | re.MULTILINE,
+)
+_SUMMARY_RE = re.compile(r'<summary>[\s\S]*?</summary>', re.IGNORECASE)
+_TOOL_TRANSCRIPT_RE = re.compile(
+    r'(?ms)^\s*.*?Tool:\s*`.*?`{4}[^\n]*\n.*?`{4}\s*(?:`{5}.*?`{5}\s*)?'
+)
 
 
 def strip_final_info_marker(text: Any) -> str:
     return _FINAL_INFO_RE.sub('', str(text or ''))
+
+
+def strip_non_user_visible_text(text: Any) -> str:
+    cleaned = strip_final_info_marker(text)
+    cleaned = _RUNNING_MARKER_RE.sub('', cleaned)
+    cleaned = _SUMMARY_RE.sub('', cleaned)
+    cleaned = _TOOL_TRANSCRIPT_RE.sub('', cleaned)
+    return cleaned.strip()
+
+
+def has_user_visible_text(text: Any) -> bool:
+    return bool(strip_non_user_visible_text(text))
+
+
+def normalize_final_turn_segs(full: str, outputs: Any) -> Optional[List[str]]:
+    if not outputs or not isinstance(outputs, (list, tuple)):
+        return None
+    segs = [strip_final_info_marker(s) for s in outputs]
+    full_text = strip_final_info_marker(full)
+    if not segs:
+        return None
+    joined = "".join(segs)
+    if full_text.strip() == joined.strip():
+        return segs
+    if joined and full_text.startswith(joined):
+        suffix = full_text[len(joined):]
+        if suffix.strip():
+            segs[-1] = segs[-1] + suffix
+        return segs
+    return None
 
 
 for _s in (sys.stdout, sys.stderr):
@@ -93,6 +153,7 @@ class Session:
     agent: Any = None
     thread: Optional[threading.Thread] = None
     cancel_requested: bool = False
+    active_turn_id: str = ""
     last_error: str = ""
     pinned: bool = False
     untitled: bool = True
@@ -113,14 +174,14 @@ def _load_plan_baseline(item: dict, msgs: list) -> int:
 
 
 def _sanitize_desktop_plan_path(session_id: str, plan_path: str) -> str:
-    """Desktop: drop shared plan_demo paths so sessions do not read the same file."""
+    """Keep only real plan-mode paths; never invent a placeholder path on load."""
     import plan_state
     p = (plan_path or "").strip()
     if not p:
         return ""
-    if plan_state.is_session_scoped_plan_path(p, session_id):
-        return p
-    return plan_state.default_session_plan_path(session_id)
+    if plan_state.is_plan_mode_path(p):
+        return p.lstrip("./\\")
+    return ""
 
 
 class AgentManager:
@@ -130,6 +191,8 @@ class AgentManager:
         self.config: Dict[str, Any] = {}
         self.sessions: Dict[str, Session] = {}
         self.active_session_id: Optional[str] = None
+        self._sessions_dir = Path(self.ga_root) / "temp" / "desktop_sessions"
+        # Legacy monolithic store; migrated into _sessions_dir on first load, then retired.
         self._sessions_file = Path(self.ga_root) / "temp" / "desktop_sessions.json"
         self._load_sessions()
 
@@ -137,56 +200,157 @@ class AgentManager:
     def mykey_path(self) -> str:
         return str(Path(self.ga_root) / "mykey.py")
 
-    def _persist(self):
+    def _session_dict(self, s: "Session") -> dict:
+        llm_hist = None
+        if s.agent and hasattr(s.agent, 'llmclient'):
+            try: llm_hist = s.agent.llmclient.backend.history
+            except Exception: pass
+        if llm_hist is None:
+            llm_hist = s.llm_history
+        return {"id": s.id, "title": s.title, "cwd": s.cwd,
+                "created_at": s.created_at, "updated_at": s.updated_at,
+                "messages": s.messages, "msg_seq": s.msg_seq,
+                "pinned": s.pinned, "untitled": s.untitled,
+                "plan_scan_baseline": s.plan_scan_baseline,
+                "plan_path": s.plan_path or "",
+                "llm_no": s.llm_no,
+                "llm_history": llm_hist}
+
+    def _session_file(self, sid: str) -> Path:
+        return self._sessions_dir / f"{sid}.json"
+
+    def _persist_session(self, s: "Session"):
+        """Write a single session file. Cost is O(one session), independent of how many
+        sessions exist — this is the fix for the monolithic-file scaling problem."""
         try:
-            self._sessions_file.parent.mkdir(parents=True, exist_ok=True)
-            arr = []
+            self._sessions_dir.mkdir(parents=True, exist_ok=True)
             with self.lock:
-                for s in self.sessions.values():
-                    llm_hist = None
-                    if s.agent and hasattr(s.agent, 'llmclient'):
-                        try: llm_hist = s.agent.llmclient.backend.history
-                        except Exception: pass
-                    if llm_hist is None:
-                        llm_hist = s.llm_history
-                    arr.append({"id": s.id, "title": s.title, "cwd": s.cwd,
-                                "created_at": s.created_at, "updated_at": s.updated_at,
-                                "messages": s.messages, "msg_seq": s.msg_seq,
-                                "pinned": s.pinned, "untitled": s.untitled,
-                                "plan_scan_baseline": s.plan_scan_baseline,
-                                "plan_path": s.plan_path or "",
-                                "llm_no": s.llm_no,
-                                "llm_history": llm_hist})
-            self._sessions_file.write_text(json.dumps(arr, ensure_ascii=False, default=str), encoding="utf-8")
+                data = self._session_dict(s)
+            tmp = self._sessions_dir / f"{s.id}.json.tmp"
+            tmp.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
+            os.replace(tmp, self._session_file(s.id))  # atomic swap
         except Exception as e:
-            print(f"[bridge] persist sessions failed: {e}", file=sys.stderr)
+            print(f"[bridge] persist session {s.id} failed: {e}", file=sys.stderr)
+
+    def _delete_session_file(self, sid: str):
+        try:
+            f = self._session_file(sid)
+            if f.exists():
+                f.unlink()
+        except Exception as e:
+            print(f"[bridge] delete session file {sid} failed: {e}", file=sys.stderr)
+
+    def _persist(self):
+        """Write every session (one file each). Used for bulk ops (import) / full flush."""
+        with self.lock:
+            sessions = list(self.sessions.values())
+        for s in sessions:
+            self._persist_session(s)
+
+    def _session_from_item(self, item: dict) -> "Session":
+        msgs = item.get("messages", [])
+        return Session(id=item["id"], title=item.get("title", "New chat"),
+                       cwd=item.get("cwd", self.ga_root),
+                       created_at=item.get("created_at", time.time()),
+                       updated_at=item.get("updated_at", time.time()),
+                       messages=msgs,
+                       msg_seq=item.get("msg_seq", 0),
+                       pinned=item.get("pinned", False),
+                       untitled=item.get("untitled", True),
+                       plan_scan_baseline=_load_plan_baseline(item, msgs),
+                       plan_path=_sanitize_desktop_plan_path(item["id"], item.get("plan_path") or ""),
+                       status="idle", agent=None,
+                       llm_history=item.get("llm_history"),
+                       llm_no=item.get("llm_no"))
 
     def _load_sessions(self):
+        # New format: one file per session under temp/desktop_sessions/.
         try:
-            if not self._sessions_file.exists():
-                return
-            arr = json.loads(self._sessions_file.read_text(encoding="utf-8"))
-            for item in arr:
-                msgs = item.get("messages", [])
-                sess = Session(id=item["id"], title=item.get("title", "New chat"),
-                               cwd=item.get("cwd", self.ga_root),
-                               created_at=item.get("created_at", time.time()),
-                               updated_at=item.get("updated_at", time.time()),
-                               messages=msgs,
-                               msg_seq=item.get("msg_seq", 0),
-                               pinned=item.get("pinned", False),
-                               untitled=item.get("untitled", True),
-                               plan_scan_baseline=_load_plan_baseline(item, msgs),
-                               plan_path=_sanitize_desktop_plan_path(
-                                   item["id"], item.get("plan_path") or ""),
-                               status="idle", agent=None,
-                               llm_history=item.get("llm_history"),
-                               llm_no=item.get("llm_no"))
-                self.sessions[sess.id] = sess
-            if self.sessions:
-                self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
+            if self._sessions_dir.is_dir():
+                for f in self._sessions_dir.glob("*.json"):
+                    try:
+                        item = json.loads(f.read_text(encoding="utf-8"))
+                        sess = self._session_from_item(item)
+                        self.sessions[sess.id] = sess
+                    except Exception as e:
+                        print(f"[bridge] load session {f.name} failed: {e}", file=sys.stderr)
         except Exception as e:
-            print(f"[bridge] load sessions failed: {e}", file=sys.stderr)
+            print(f"[bridge] load sessions dir failed: {e}", file=sys.stderr)
+
+        # One-time migration from the legacy monolithic desktop_sessions.json.
+        try:
+            if self._sessions_file.exists():
+                arr = json.loads(self._sessions_file.read_text(encoding="utf-8"))
+                for item in arr:
+                    if not isinstance(item, dict) or item.get("id") in self.sessions:
+                        continue
+                    try:
+                        sess = self._session_from_item(item)
+                        self.sessions[sess.id] = sess
+                        self._persist_session(sess)
+                    except Exception as e:
+                        print(f"[bridge] migrate session failed: {e}", file=sys.stderr)
+                # Retire the legacy file so we do not migrate again next launch.
+                with contextlib.suppress(Exception):
+                    self._sessions_file.rename(
+                        self._sessions_file.parent / (self._sessions_file.name + ".migrated"))
+        except Exception as e:
+            print(f"[bridge] migrate sessions failed: {e}", file=sys.stderr)
+
+        if self.sessions:
+            self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
+
+    def import_sessions(self, source_dir: str) -> dict:
+        """把 source 的桌面会话合并进当前列表(按 id 去重)。
+
+        兼容两种源格式:新版 temp/desktop_sessions/<id>.json,以及旧版单文件
+        temp/desktop_sessions.json(含已退休的 .migrated)。只落盘新增的会话。
+        """
+        src = Path(source_dir).expanduser().resolve()
+        items: List[dict] = []
+        found = False
+
+        # New per-session format.
+        src_dir = src / "temp" / "desktop_sessions"
+        if src_dir.is_dir():
+            for f in src_dir.glob("*.json"):
+                try:
+                    items.append(json.loads(f.read_text(encoding="utf-8")))
+                    found = True
+                except Exception:
+                    continue
+
+        # Legacy monolithic format (live or already retired).
+        for legacy in (src / "temp" / "desktop_sessions.json",
+                       src / "temp" / "desktop_sessions.json.migrated"):
+            if legacy.is_file():
+                found = True
+                try:
+                    arr = json.loads(legacy.read_text(encoding="utf-8"))
+                    if isinstance(arr, list):
+                        items.extend(x for x in arr if isinstance(x, dict))
+                except Exception:
+                    continue
+
+        if not found:
+            return {"sessionsAdded": 0, "sessionsSkipped": 0, "sessionsFileFound": False}
+
+        added = 0
+        skipped = 0
+        new_sessions: List["Session"] = []
+        with self.lock:
+            for item in items:
+                sid = item.get("id")
+                if not sid or sid in self.sessions:
+                    skipped += 1
+                    continue
+                sess = self._session_from_item(item)
+                self.sessions[sid] = sess
+                new_sessions.append(sess)
+                added += 1
+        for sess in new_sessions:
+            self._persist_session(sess)
+        return {"sessionsAdded": added, "sessionsSkipped": skipped, "sessionsFileFound": True}
 
     def _mykey_file(self) -> Path:
         p = Path(self.ga_root) / "mykey.py"
@@ -553,7 +717,7 @@ class AgentManager:
         sess.updated_at = time.time()
         if role == "user" and content.strip() and sess.title == "New chat":
             sess.title = content.strip().replace("\n", " ")[:40]
-        self._persist()
+        self._persist_session(sess)
         return msg
 
     def create_session(self, cwd: Optional[str] = None) -> Session:
@@ -563,7 +727,7 @@ class AgentManager:
             self.sessions[sid] = sess
             self.active_session_id = sid
         emit_session_state(sess, "created")
-        self._persist()
+        self._persist_session(sess)
         return sess
 
     def get_session(self, sid: str) -> Session:
@@ -584,7 +748,7 @@ class AgentManager:
                 with contextlib.suppress(Exception):
                     sess.agent.abort()
         emit_session_state(sess, "closed")
-        self._persist()
+        self._delete_session_file(sid)
         _purge_session_uploads(sid)
         return {"ok": True, "sessionId": sid}
 
@@ -606,23 +770,25 @@ class AgentManager:
             if image_metas:
                 extra["images"] = image_metas
             user_msg = self.add_message(sess, "user", prompt, **extra)
-            import plan_state
-            if plan_state.is_plan_preset_prompt(prompt):
-                plan_state.bind_plan_session(sess, prompt)
-                self._persist()
+            turn_id = uuid.uuid4().hex
             sess.status = "running"
             sess.cancel_requested = False
+            sess.active_turn_id = turn_id
             sess.last_error = ""
             sess.partial = {"id": sess.msg_seq + 1, "role": "assistant", "content": "", "ts": time.time(), "partial": True,
                             "curr_turn": 0, "turn_segs": []}  # turn_segs[i]=第i轮全文(权威结构化,前端按轮渲染);content保留双轨兜底
-            t = threading.Thread(target=self.run_agent_turn, args=(sess, prompt, None), daemon=True, name=f"Turn-{sid}")
+            t = threading.Thread(target=self.run_agent_turn, args=(sess, prompt, None, turn_id), daemon=True, name=f"Turn-{sid}")
             sess.thread = t
             t.start()
             seq = sess.msg_seq
         emit_session_state(sess, "running")
         return {"ok": True, "sessionId": sid, "accepted": True, "userMessageId": user_msg["id"], "seq": seq}
 
-    def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None):
+    def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None, turn_id: str = ""):
+        def turn_state() -> tuple[bool, bool]:
+            with self.lock:
+                return sess.active_turn_id == turn_id, sess.cancel_requested
+
         try:
             if sess.agent is None:
                 sess.agent = self.make_agent(sess)
@@ -639,7 +805,10 @@ class AgentManager:
                 pieces = []
                 import queue as _queue
                 while True:
-                    if sess.cancel_requested:
+                    is_current, is_cancelled = turn_state()
+                    if not is_current:
+                        return
+                    if is_cancelled:
                         break
                     try:
                         item = display_q.get(timeout=1.0)
@@ -650,7 +819,7 @@ class AgentManager:
                             text = str(item["next"])
                             pieces.append(text)
                             with self.lock:
-                                if sess.partial is not None:
+                                if sess.partial is not None and sess.active_turn_id == turn_id:
                                     sess.partial["content"] = "".join(pieces) if getattr(agent, "inc_out", False) else text
                                     sess.partial["ts"] = time.time()
                                     sess.updated_at = time.time()
@@ -668,11 +837,10 @@ class AgentManager:
                                             _segs[_idx - 1] = str(_outs[-2])
                         if "done" in item:
                             full = strip_final_info_marker(item.get("done") or "")
-                            done_outputs = item.get("outputs")  # done时=turn_resps.copy()全量轮
+                            done_outputs = normalize_final_turn_segs(full, item.get("outputs"))  # done时=turn_resps.copy()全量轮
                             if done_outputs:
-                                done_outputs = [strip_final_info_marker(s) for s in done_outputs]
                                 with self.lock:
-                                    if sess.partial is not None:
+                                    if sess.partial is not None and sess.active_turn_id == turn_id:
                                         sess.partial["content"] = full
                                         sess.partial["ts"] = time.time()
                                         sess.partial["updatedAt"] = sess.partial["ts"] if "updatedAt" in sess.partial else sess.partial.get("updatedAt")
@@ -683,29 +851,38 @@ class AgentManager:
                     else:
                         pieces.append(str(item))
                 if not full and pieces:
-                    full = pieces[-1] if not getattr(agent, "inc_out", False) else "".join(pieces)
+                    candidate = pieces[-1] if not getattr(agent, "inc_out", False) else "".join(pieces)
+                    if has_user_visible_text(candidate):
+                        full = candidate
             else:
                 full = "GenericAgent object has no put_task method"
-            if not full:
-                full = "(completed)"
-            if sess.cancel_requested:
+            is_current, is_cancelled = turn_state()
+            if not is_current:
+                return
+            if is_cancelled:
                 with self.lock:
                     sess.partial = None
+                    if sess.active_turn_id == turn_id:
+                        sess.active_turn_id = ""
                     # Ensure status stays cancelled (don't overwrite)
                     if sess.status != "cancelled":
                         sess.status = "cancelled"
                     sess.updated_at = time.time()
                 emit_session_state(sess, "cancelled")
                 return
+            if not full:
+                raise RuntimeError("Agent turn ended without a user-visible response.")
             with self.lock:
+                if sess.active_turn_id != turn_id:
+                    return
                 sess.partial = None
                 full = strip_final_info_marker(full)
-                if done_outputs:
-                    done_outputs = [strip_final_info_marker(s) for s in done_outputs]
+                if not has_user_visible_text(full):
+                    raise RuntimeError("Agent turn ended without a user-visible response.")
                 import plan_state
                 plan_state.sync_plan_path_from_text(sess, full, sess.cwd or self.ga_root)
                 # 轨道2: 落库时带结构化全量轮(权威turn_segs),前端按轮渲染;content保留兜底
-                _final_segs = [str(s) for s in done_outputs] if done_outputs else None
+                _final_segs = normalize_final_turn_segs(full, done_outputs)
                 if _final_segs:
                     self.add_message(sess, "assistant", full, turn_segs=_final_segs)
                 else:
@@ -713,13 +890,17 @@ class AgentManager:
                 try: sess.llm_history = json.loads(json.dumps(agent.llmclient.backend.history, ensure_ascii=False, default=str))
                 except Exception: pass
                 sess.status = "idle"
+                sess.active_turn_id = ""
                 sess.last_error = ""
             emit_session_state(sess, "idle")
         except Exception as e:
             tb = traceback.format_exc()
             with self.lock:
+                if sess.active_turn_id != turn_id:
+                    return
                 sess.partial = None
                 sess.status = "error"
+                sess.active_turn_id = ""
                 sess.last_error = str(e)
                 self.add_message(sess, "error", str(e))
             print(tb, file=sys.stderr)
@@ -769,9 +950,10 @@ class AgentManager:
             partial_text = ""
             if sess.partial:
                 partial_text = (sess.partial.get("content") or "").strip()
-            if partial_text:
+            if partial_text and has_user_visible_text(partial_text):
                 self.add_message(sess, "assistant", partial_text, stopped=True)
             sess.status = "cancelled"
+            sess.active_turn_id = ""
             sess.partial = None
             sess.updated_at = time.time()
         emit_session_state(sess, "cancelled")
@@ -826,7 +1008,7 @@ class AgentManager:
                 with contextlib.suppress(Exception):
                     sess.agent.next_llm(int(llm_no))
             sess.updated_at = time.time()
-        self._persist()
+        self._persist_session(sess)
         return {"ok": True, "sessionId": sid, "llmNo": sess.llm_no, "model": self._live_model(sess)}
 
 
@@ -936,11 +1118,13 @@ def discover_extra_services(ga_root: Path) -> List[dict]:
     # conductor 跟 scheduler 一样,bridge 启动时自动拉起。--no-browser 是关键:
     # conductor.py 默认会用 webbrowser.open 在用户浏览器弹一个 8900 端口 UI,
     # 桌面版自启时不需要这个独立 UI(用户从「指挥家」页直接访问)。
-    conductor = ga_root / "frontends" / "conductor.py"
+    # 方案三:conductor 深度桌面耦合,恒用 bundle 自带的那份(APP_DIR 侧),
+    # 通过 GA_ROOT(见 start_service env)让它 import 外部核。
+    conductor = APP_DIR / "conductor.py"
     if conductor.is_file():
         out.append({
             "id": "frontends/conductor.py",
-            "cmd": [sys.executable, "frontends/conductor.py", "--no-browser"],
+            "cmd": [sys.executable, str(conductor), "--no-browser"],
         })
     return out
 
@@ -1094,7 +1278,9 @@ class ServiceManager:
             self._notify(sid, err=err)
             return {"ok": False, "error": "not_configured", "service": self._state(sid, err=err)}
         self.buffers[sid] = deque(maxlen=500)
-        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+        # Pass the effective ga_root so bundle-side extras (conductor) import the external核.
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8",
+               "GA_ROOT": str(self.ga_root)}
         kw: Dict[str, Any] = dict(
             cwd=str(self.ga_root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", bufsize=1, env=env,
@@ -1512,7 +1698,7 @@ async def patch_session_handler(request):
     if "plan_scan_baseline" in data:
         sess.plan_scan_baseline = int(data["plan_scan_baseline"])
     sess.updated_at = time.time()
-    manager._persist()
+    manager._persist_session(sess)
     return json_ok({"ok": True, "session": manager.snapshot(sess, include_messages=False)})
 
 
@@ -1818,6 +2004,87 @@ async def mykey_save_handler(request):
     return json_ok({"ok": True, "path": str(manager._mykey_file()), "profiles": profiles})
 
 
+def _import_memory_from(source_dir: str, ga_root: str) -> dict:
+    """把 source_dir 的 memory/ 与 temp/model_responses/ 导入到 ga_root。
+
+    memory/: 先整体备份现有 ga_root/memory 到 temp/memory_import_backup_<ts>/,再覆盖同名文件、补齐新文件。
+    temp/model_responses/: 文件名带 pid/logid 天然唯一,只拷目标端不存在的,已存在的跳过。
+    """
+    src = Path(source_dir).expanduser().resolve()
+    dst_root = Path(ga_root).resolve()
+    if not src.is_dir():
+        raise ValueError(f"source is not a directory: {src}")
+    if src == dst_root:
+        raise ValueError("source is the same as current GA root")
+
+    src_mem = src / "memory"
+    src_resp = src / "temp" / "model_responses"
+    if not src_mem.is_dir() and not src_resp.is_dir():
+        raise ValueError("not a GA directory (no memory/ or temp/model_responses/)")
+
+    memory_copied = 0
+    responses_copied = 0
+    responses_skipped = 0
+    backup_dir = ""
+
+    # --- memory/: 备份后覆盖 ---
+    if src_mem.is_dir():
+        dst_mem = dst_root / "memory"
+        if dst_mem.is_dir() and any(dst_mem.iterdir()):
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            backup_root = dst_root / "temp" / f"memory_import_backup_{ts}"
+            backup_root.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(dst_mem, backup_root / "memory")
+            backup_dir = str(backup_root)
+        dst_mem.mkdir(parents=True, exist_ok=True)
+        for item in src_mem.rglob("*"):
+            rel = item.relative_to(src_mem)
+            target = dst_mem / rel
+            if item.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, target)
+                memory_copied += 1
+
+    # --- temp/model_responses/: 补齐缺失 ---
+    if src_resp.is_dir():
+        dst_resp = dst_root / "temp" / "model_responses"
+        dst_resp.mkdir(parents=True, exist_ok=True)
+        for item in src_resp.rglob("*"):
+            if item.is_dir():
+                continue
+            rel = item.relative_to(src_resp)
+            target = dst_resp / rel
+            if target.exists():
+                responses_skipped += 1
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, target)
+            responses_copied += 1
+
+    return {
+        "ok": True,
+        "memoryCopied": memory_copied,
+        "responsesCopied": responses_copied,
+        "responsesSkipped": responses_skipped,
+        "backupDir": backup_dir,
+    }
+
+
+async def memory_import_handler(request):
+    data = await read_json(request)
+    source_dir = (data.get("sourceDir") or "").strip()
+    if not source_dir:
+        return json_ok({"ok": False, "error": "missing_sourceDir"}, status=400)
+    try:
+        result = _import_memory_from(source_dir, manager.ga_root)
+        result.update(manager.import_sessions(source_dir))
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)}, status=400)
+    return json_ok(result)
+
+
 async def conductor_model_get_handler(request):
     return json_ok({"model": _conductor_settings()})
 
@@ -1999,6 +2266,7 @@ def create_app():
     app.router.add_get("/services/panel", service_panel_handler)
     app.router.add_get("/services/mykey", mykey_get_handler)
     app.router.add_post("/services/mykey", mykey_save_handler)
+    app.router.add_post("/memory/import", memory_import_handler)
     app.router.add_get("/services/conductor/model", conductor_model_get_handler)
     app.router.add_post("/services/conductor/model", conductor_model_save_handler)
     app.router.add_post("/services/stop-extras", stop_extras_handler)
