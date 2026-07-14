@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useSettingsStore } from '../../../stores/settings';
-import { BUILTIN_SKILLS, type SkillDef } from './skills';
+import { BUILTIN_SKILLS, loadCustomSkills } from './skills';
 
 interface Props {
   visible: boolean;
@@ -9,22 +9,12 @@ interface Props {
   onClose: () => void;
 }
 
-function getCustomCompletions(): SkillDef[] {
-  try {
-    const raw = localStorage.getItem('ga_custom_presets');
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
 export function CompletionDrawer({ visible, query, onSelect, onClose }: Props) {
   const lang = useSettingsStore((s) => s.lang);
   const [focusIdx, setFocusIdx] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const customs = getCustomCompletions();
+  const customs = loadCustomSkills();
   const allItems = [...BUILTIN_SKILLS, ...customs];
 
   const filtered = query

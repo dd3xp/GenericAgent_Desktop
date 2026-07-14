@@ -1,18 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSettingsStore } from '../../../stores/settings';
-import { BUILTIN_SKILLS, type SkillDef } from './skills';
-
-const CUSTOM_PRESETS_KEY = 'ga_custom_presets';
-
-function getCustomPresets(): SkillDef[] {
-  try {
-    const raw = localStorage.getItem(CUSTOM_PRESETS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
+import { BUILTIN_SKILLS, loadCustomSkills } from './skills';
 
 const LABELS = {
   hint: { zh: '提示：输入 / 以内联调用技能', en: 'Tip: type / to invoke a skill inline' },
@@ -30,7 +18,7 @@ export function SkillPanel({ onSelect }: Props) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const lang = useSettingsStore((s) => s.lang);
 
-  const customs = getCustomPresets();
+  const customs = loadCustomSkills();
   const allItems = [...BUILTIN_SKILLS, ...customs];
 
   const toggle = useCallback(() => {

@@ -5,6 +5,40 @@ export interface SkillDef {
   prompt: string;
 }
 
+export const CUSTOM_PRESETS_KEY = 'ga_custom_presets';
+
+export function normalizeCustomSkills(value: unknown): SkillDef[] {
+  if (!Array.isArray(value)) return [];
+  const skills: SkillDef[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.id !== 'string' || typeof raw.title !== 'string' || typeof raw.prompt !== 'string') continue;
+    const id = raw.id.trim();
+    const title = raw.title.trim();
+    const prompt = raw.prompt.trim();
+    if (!id || !title || !prompt) continue;
+
+    const rawDesc = raw.desc && typeof raw.desc === 'object'
+      ? raw.desc as Record<string, unknown>
+      : {};
+    const fallback = prompt.replace(/\s+/g, ' ').slice(0, 80);
+    const zh = typeof rawDesc.zh === 'string' && rawDesc.zh.trim() ? rawDesc.zh : fallback;
+    const en = typeof rawDesc.en === 'string' && rawDesc.en.trim() ? rawDesc.en : zh;
+    skills.push({ id, title, prompt, desc: { zh, en } });
+  }
+  return skills;
+}
+
+export function loadCustomSkills(): SkillDef[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PRESETS_KEY);
+    return raw ? normalizeCustomSkills(JSON.parse(raw)) : [];
+  } catch {
+    return [];
+  }
+}
+
 export const BUILTIN_SKILLS: SkillDef[] = [
   {
     id: 'plan',

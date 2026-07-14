@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { BUILTIN_SKILLS, matchSkillPrefix } from '../components/chat/Composer/skills';
+import { BUILTIN_SKILLS, matchSkillPrefix, normalizeCustomSkills } from '../components/chat/Composer/skills';
 
 describe('BUILTIN_SKILLS', () => {
   it('has unique ids', () => {
@@ -19,6 +19,27 @@ describe('BUILTIN_SKILLS', () => {
       expect(skill.desc.zh).toBeTruthy();
       expect(skill.desc.en).toBeTruthy();
     }
+  });
+});
+
+describe('normalizeCustomSkills', () => {
+  it('migrates legacy presets without descriptions', () => {
+    const [skill] = normalizeCustomSkills([
+      { id: 'weekly', title: '周报', prompt: '整理本周工作并输出周报' },
+    ]);
+    expect(skill.desc.zh).toBe('整理本周工作并输出周报');
+    expect(skill.desc.en).toBe(skill.desc.zh);
+  });
+
+  it('preserves bilingual descriptions and filters malformed entries', () => {
+    const skills = normalizeCustomSkills([
+      { id: 'valid', title: 'Valid', prompt: 'Do it', desc: { zh: '中文', en: 'English' } },
+      { id: 'missing-prompt', title: 'Invalid' },
+      null,
+    ]);
+    expect(skills).toEqual([
+      { id: 'valid', title: 'Valid', prompt: 'Do it', desc: { zh: '中文', en: 'English' } },
+    ]);
   });
 });
 
