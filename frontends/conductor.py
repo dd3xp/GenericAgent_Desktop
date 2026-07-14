@@ -8,7 +8,17 @@ from fastapi.responses import FileResponse, PlainTextResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def _resolve_ga_root() -> str:
+    """External core dir when launched as the bundle's conductor (design 三).
+    Prefer GA_ROOT env (set by the desktop bridge), else derive from own location."""
+    val = (os.environ.get("GA_ROOT", "") or "").strip()
+    if val:
+        root = os.path.abspath(os.path.expanduser(val))
+        if os.path.exists(os.path.join(root, "agentmain.py")):
+            return root
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+ROOT = _resolve_ga_root()
 if ROOT not in sys.path: sys.path.insert(0, ROOT)
 
 from agentmain import GenericAgent
@@ -74,6 +84,20 @@ def _apply_desktop_model(agent: "GenericAgent") -> None:
         _fallback_usable_model(agent)
 
 
+def _select_llm(agent: "GenericAgent", llm: Any) -> bool:
+    if llm is None or str(llm).strip() == "": return False
+    q = str(llm).strip()
+    if isinstance(llm, int) or q.isdigit(): agent.next_llm(int(q)); return True
+    q = q.lower(); agent.load_llm_sessions()
+    for i, c in enumerate(agent.llmclients):
+        vals = []
+        for fn in (lambda: agent.get_llm_name(c), lambda: agent.get_llm_name(c, model=True), lambda: c.backend.name, lambda: c.backend.model):
+            try: vals.append(str(fn()).lower())
+            except Exception: pass
+        if any(q in v for v in vals): agent.next_llm(i); return True
+    raise ValueError(f"llm not found: {llm}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 服务启动（事件循环已就绪）：捕获 loop 供工作线程跨线程推 WS 广播，并起主agent
@@ -94,6 +118,7 @@ class ChatIn(BaseModel):
 
 class StartSubagentIn(BaseModel):
     prompt: str
+    llm: Any = None
 
 class ApprovalIn(BaseModel):
     prompt: str
@@ -102,6 +127,7 @@ class ApprovalIn(BaseModel):
 class SubagentActionIn(BaseModel):
     action: str = "intervene"  # intervene | abort | kill
     msg: str = ""
+    llm: Any = None
 
 @dataclass
 class SubAgentState:
@@ -247,13 +273,13 @@ class SubagentPool:
                 s.agent.task_queue.put("EXIT")  
                 with self.lock: self.subagents.pop(sid, None)  
             if to_abort: push_cards()
-    def start_subagent(self, prompt: str) -> dict:
+    def start_subagent(self, prompt: str, llm: Any = None) -> dict:
         sid = short_id()
         agent = GenericAgent()
         agent.inc_out = True
         agent.verbose = False
         agent.no_print = True
-        _apply_desktop_model(agent)
+        if not _select_llm(agent, llm): _apply_desktop_model(agent)
         th = start_agent_runner(agent, f"subagent-{sid}")
         state = SubAgentState(id=sid, agent=agent, prompt=prompt, status="running", thread=th)
         with self.lock: self.subagents[sid] = state
@@ -265,10 +291,11 @@ class SubagentPool:
         threading.Thread(target=monitor_display_queue, args=(sid, dq, True), name=f"monitor-{sid}", daemon=True).start()
         push_cards()
         return {"id": sid, "status": "running"}
-    def input_subagent(self, sid: str, msg: str) -> dict:
+    def input_subagent(self, sid: str, msg: str, llm: Any = None) -> dict:
         with self.lock: s = self.subagents.get(sid)
         if not s: return {"error": "subagent not found", "id": sid}
         if s.status == "running": return {"error": "subagent is still running, cannot input/reply. Start a new subagent instead.", "id": sid}
+        _select_llm(s.agent, llm)
         s.prompt = msg
         s.reply = ""
         s.status = "running"
@@ -289,10 +316,10 @@ READMES = {
 Conductor API\tBase: http://{HOST}:{PORT}
 
 POST /chat\tbody: {{"msg": "..."}}\t给用户发消息
-POST /subagent\tbody: {{"prompt": "..."}}\t启动新subagent，返回 {{"id": "xxx"}}
+POST /subagent\tbody: {{"prompt": "..."}}\t启动新subagent，返回 {{"id": "xxx"}}；指定模型加参数llm(数字/名称)
 POST /approval\tbody: {{"prompt": "...", "source": "..."}}\t推一条待批任务到前端(后端不存)，用户同意则直接派发为subagent
 POST /subagent/{{id}}\tbody: {{"action": "keyinfo", "msg": "..."}}\t注入key_info（agent下轮可见）
-POST /subagent/{{id}}\tbody: {{"action": "input", "msg": "..."}}\t开新一轮任务（agent停下后追加）
+POST /subagent/{{id}}\tbody: {{"action": "input", "msg": "..."}}\t开新一轮任务；指定模型加参数llm(数字/名称)
 POST /subagent/{{id}}\tbody: {{"action": "stop"}}\t中断执行但保留（可继续input/reply）
 GET /chat?last=N\t返回最近N条对话（默认20）
 GET /subagent\t返回 {{"items": [...]}}\t查看所有subagent状态
@@ -411,7 +438,9 @@ API: {base}；requests，GET /readme查用法，GET /chat读未读对话，GET /
                 _apply_desktop_model(self.agent)
                 dq = self.agent.put_task(prompt, source="conductor")
                 self._drain(dq, events)
-            except Exception as e: print(f"Conductor error: {e}")
+            except Exception as e:
+                print(f"Conductor error: {e}")
+                add_chat(f"⚠ 回复失败：{e}", role="error")
 
     def start(self): threading.Thread(target=self._run, name="conductor-loop", daemon=True).start()
 
@@ -419,7 +448,17 @@ API: {base}；requests，GET /readme查用法，GET /chat读未读对话，GET /
 conductor = Conductor()
 
 # ---- IM poller: 探测conductor_im_plugins/下各插件,信号变化→唤醒总管 ----
-IM_DIR, IM_COOLDOWN = os.path.join(os.path.dirname(__file__), "conductor_im_plugins"), 300
+def _resolve_im_dir() -> str:
+    # 方案三: conductor.py itself is bundle-owned, but IM plugins are user/environment
+    # integrations. Prefer the external core's plugins when GA_ROOT points at one; fall back
+    # to the bundle templates/examples when the external core has no plugin directory.
+    external = os.path.join(ROOT, "frontends", "conductor_im_plugins")
+    if os.path.isdir(external):
+        return external
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "conductor_im_plugins")
+
+
+IM_DIR, IM_COOLDOWN = _resolve_im_dir(), 300
 IM_PROMPTS: Dict[str, str] = {}   # source -> 采集prompt（派采集subagent时按需取）
 
 def im_poll_loop():
@@ -484,7 +523,7 @@ INSTR_DISPATCHED = "Task received. I'll handle THIS TASK from here. You MUST to 
 
 @app.post("/subagent")
 def api_start_subagent(body: StartSubagentIn):
-    result = pool.start_subagent(body.prompt)
+    result = pool.start_subagent(body.prompt, body.llm)
     result["instruction"] = INSTR_DISPATCHED
     return result
 
@@ -498,7 +537,7 @@ def api_subagent_action(sid: str, body: SubagentActionIn):
         result["instruction"] = "Received. I'll incorporate this. You MUST to do other task or end your reply."
         return result
     if action in ("input", "reply", "append", "message", "msg"):
-        result = pool.input_subagent(sid, body.msg)
+        result = pool.input_subagent(sid, body.msg, body.llm)
         result["instruction"] = INSTR_DISPATCHED
         return result
     if action in ("abort", "stop"):
@@ -511,10 +550,11 @@ def api_subagent_action(sid: str, body: SubagentActionIn):
 
 @app.get("/chat")
 def api_get_chat(last: int = 20):
+    items = [m.copy() for m in chat_messages[-last:]]
     for m in chat_messages:
         if m.get("role") == "user" and not m.get("read"): m["read"] = True
     schedule_broadcast({"type": "chat_read"})
-    return {"items": chat_messages[-last:]}
+    return {"items": items}
 
 @app.post("/chat")
 def api_chat(body: ChatIn):

@@ -64,7 +64,29 @@ def bridge_print(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+def _ga_root_override() -> Optional[Path]:
+    """External core dir injected by the desktop shell (design 三: bundle bridge + external核).
+    Priority: --ga-root <path> arg, then GA_ROOT env. Only honored when it holds agentmain.py;
+    an invalid/missing value returns None so we fall back to the bundle's own derivation."""
+    val = ""
+    for i, a in enumerate(sys.argv):
+        if a == "--ga-root" and i + 1 < len(sys.argv):
+            val = sys.argv[i + 1]
+        elif a.startswith("--ga-root="):
+            val = a.split("=", 1)[1]
+    if not val:
+        val = os.environ.get("GA_ROOT", "")
+    val = (val or "").strip()
+    if not val:
+        return None
+    root = Path(val).expanduser().resolve()
+    return root if (root / "agentmain.py").exists() else None
+
+
 def find_default_ga_root() -> Path:
+    override = _ga_root_override()
+    if override is not None:
+        return override
     candidates = [
         APP_DIR / "..",
         APP_DIR / ".." / "..",
@@ -81,10 +103,30 @@ def find_default_ga_root() -> Path:
 DEFAULT_GA_ROOT = find_default_ga_root()
 
 _FINAL_INFO_RE = re.compile(r'\n*`{5}\n*\[Info\] Final response to user\.\n*`{5}\s*$')
+_RUNNING_MARKER_RE = re.compile(
+    r'^\s*\*{0,2}(?:LLM Running\s*\(Turn\s*\d+\)|Turn\s*\d+)\s*\.\.\.\*{0,2}\s*$',
+    re.IGNORECASE | re.MULTILINE,
+)
+_SUMMARY_RE = re.compile(r'<summary>[\s\S]*?</summary>', re.IGNORECASE)
+_TOOL_TRANSCRIPT_RE = re.compile(
+    r'(?ms)^\s*.*?Tool:\s*`.*?`{4}[^\n]*\n.*?`{4}\s*(?:`{5}.*?`{5}\s*)?'
+)
 
 
 def strip_final_info_marker(text: Any) -> str:
     return _FINAL_INFO_RE.sub('', str(text or ''))
+
+
+def strip_non_user_visible_text(text: Any) -> str:
+    cleaned = strip_final_info_marker(text)
+    cleaned = _RUNNING_MARKER_RE.sub('', cleaned)
+    cleaned = _SUMMARY_RE.sub('', cleaned)
+    cleaned = _TOOL_TRANSCRIPT_RE.sub('', cleaned)
+    return cleaned.strip()
+
+
+def has_user_visible_text(text: Any) -> bool:
+    return bool(strip_non_user_visible_text(text))
 
 
 def normalize_final_turn_segs(full: str, outputs: Any) -> Optional[List[str]]:
@@ -128,6 +170,7 @@ class Session:
     agent: Any = None
     thread: Optional[threading.Thread] = None
     cancel_requested: bool = False
+    active_turn_id: str = ""
     last_error: str = ""
     pinned: bool = False
     untitled: bool = True
@@ -753,13 +796,15 @@ class AgentManager:
             if image_metas:
                 extra["images"] = image_metas
             user_msg = self.add_message(sess, "user", prompt, **extra)
+            turn_id = uuid.uuid4().hex
             sess.status = "running"
             sess.cancel_requested = False
+            sess.active_turn_id = turn_id
             sess.last_error = ""
             sess.partial = {"id": sess.msg_seq + 1, "role": "assistant", "content": "", "ts": time.time(), "partial": True,
                             "curr_turn": 0, "turn_segs": []}  # turn_segs[i]=第i轮全文(权威结构化,前端按轮渲染);content保留双轮兜底
             image_paths = [m["path"] for m in (image_metas or []) if m.get("path")]
-            t = threading.Thread(target=self.run_agent_turn, args=(sess, agent_prompt, image_paths or None), daemon=True, name=f"Turn-{sid}")
+            t = threading.Thread(target=self.run_agent_turn, args=(sess, agent_prompt, image_paths or None, turn_id), daemon=True, name=f"Turn-{sid}")
             sess.thread = t
             t.start()
             seq = sess.msg_seq
@@ -805,7 +850,11 @@ class AgentManager:
 
         backend.ask = patched_ask
 
-    def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None):
+    def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None, turn_id: str = ""):
+        def turn_state() -> tuple[bool, bool]:
+            with self.lock:
+                return sess.active_turn_id == turn_id, sess.cancel_requested
+
         try:
             if sess.agent is None:
                 sess.agent = self.make_agent(sess)
@@ -824,7 +873,10 @@ class AgentManager:
                 pieces = []
                 import queue as _queue
                 while True:
-                    if sess.cancel_requested:
+                    is_current, is_cancelled = turn_state()
+                    if not is_current:
+                        return
+                    if is_cancelled:
                         break
                     try:
                         item = display_q.get(timeout=1.0)
@@ -835,7 +887,7 @@ class AgentManager:
                             text = str(item["next"])
                             pieces.append(text)
                             with self.lock:
-                                if sess.partial is not None:
+                                if sess.partial is not None and sess.active_turn_id == turn_id:
                                     sess.partial["content"] = "".join(pieces) if getattr(agent, "inc_out", False) else text
                                     sess.partial["ts"] = time.time()
                                     sess.updated_at = time.time()
@@ -860,7 +912,7 @@ class AgentManager:
                             done_outputs = normalize_final_turn_segs(full, item.get("outputs"))  # done时=turn_resps.copy()全量轮
                             if done_outputs:
                                 with self.lock:
-                                    if sess.partial is not None:
+                                    if sess.partial is not None and sess.active_turn_id == turn_id:
                                         sess.partial["content"] = full
                                         sess.partial["ts"] = time.time()
                                         sess.partial["updatedAt"] = sess.partial["ts"] if "updatedAt" in sess.partial else sess.partial.get("updatedAt")
@@ -871,23 +923,34 @@ class AgentManager:
                     else:
                         pieces.append(str(item))
                 if not full and pieces:
-                    full = pieces[-1] if not getattr(agent, "inc_out", False) else "".join(pieces)
+                    candidate = pieces[-1] if not getattr(agent, "inc_out", False) else "".join(pieces)
+                    if has_user_visible_text(candidate):
+                        full = candidate
             else:
                 full = "GenericAgent object has no put_task method"
-            if not full:
-                full = "(completed)"
-            if sess.cancel_requested:
+            is_current, is_cancelled = turn_state()
+            if not is_current:
+                return
+            if is_cancelled:
                 with self.lock:
                     sess.partial = None
+                    if sess.active_turn_id == turn_id:
+                        sess.active_turn_id = ""
                     # Ensure status stays cancelled (don't overwrite)
                     if sess.status != "cancelled":
                         sess.status = "cancelled"
                     sess.updated_at = time.time()
                 emit_session_state(sess, "cancelled")
                 return
+            if not full:
+                raise RuntimeError("Agent turn ended without a user-visible response.")
             with self.lock:
+                if sess.active_turn_id != turn_id:
+                    return
                 sess.partial = None
                 full = strip_final_info_marker(full)
+                if not has_user_visible_text(full):
+                    raise RuntimeError("Agent turn ended without a user-visible response.")
                 import plan_state
                 plan_state.sync_plan_path_from_text(sess, full, sess.cwd or self.ga_root)
                 # 轨道2: 落库时带结构化全量轮(权威turn_segs),前端按轮渲染;content保留兜底
@@ -899,13 +962,17 @@ class AgentManager:
                 try: sess.llm_history = json.loads(json.dumps(agent.llmclient.backend.history, ensure_ascii=False, default=str))
                 except Exception: pass
                 sess.status = "idle"
+                sess.active_turn_id = ""
                 sess.last_error = ""
             emit_session_state(sess, "idle")
         except Exception as e:
             tb = traceback.format_exc()
             with self.lock:
+                if sess.active_turn_id != turn_id:
+                    return
                 sess.partial = None
                 sess.status = "error"
+                sess.active_turn_id = ""
                 sess.last_error = str(e)
                 self.add_message(sess, "error", str(e))
             bridge_print(f"[turn] error: {e}")
@@ -956,9 +1023,10 @@ class AgentManager:
             partial_text = ""
             if sess.partial:
                 partial_text = (sess.partial.get("content") or "").strip()
-            if partial_text:
+            if partial_text and has_user_visible_text(partial_text):
                 self.add_message(sess, "assistant", partial_text, stopped=True)
             sess.status = "cancelled"
+            sess.active_turn_id = ""
             sess.partial = None
             sess.updated_at = time.time()
         emit_session_state(sess, "cancelled")
@@ -1123,11 +1191,13 @@ def discover_extra_services(ga_root: Path) -> List[dict]:
     # conductor 跟 scheduler 一样,bridge 启动时自动拉起。--no-browser 是关键:
     # conductor.py 默认会用 webbrowser.open 在用户浏览器弹一个 8900 端口 UI,
     # 桌面版自启时不需要这个独立 UI(用户从「指挥家」页直接访问)。
-    conductor = ga_root / "frontends" / "conductor.py"
+    # 方案三:conductor 深度桌面耦合,恒用 bundle 自带的那份(APP_DIR 侧),
+    # 通过 GA_ROOT(见 start_service env)让它 import 外部核。
+    conductor = APP_DIR / "conductor.py"
     if conductor.is_file():
         out.append({
             "id": "frontends/conductor.py",
-            "cmd": [sys.executable, "frontends/conductor.py", "--no-browser"],
+            "cmd": [sys.executable, str(conductor), "--no-browser"],
             "port": 8900,
         })
     return out
@@ -1361,7 +1431,9 @@ class ServiceManager:
             self._notify(sid, err=err)
             return {"ok": False, "error": "not_configured", "service": self._state(sid, err=err)}
         self.buffers[sid] = deque(maxlen=500)
-        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+        # Pass the effective ga_root so bundle-side extras (conductor) import the external核.
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8",
+               "GA_ROOT": str(self.ga_root)}
         kw: Dict[str, Any] = dict(
             cwd=str(self.ga_root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", bufsize=1, env=env,
