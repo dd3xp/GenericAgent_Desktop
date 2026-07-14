@@ -124,7 +124,9 @@ async def auth_http_middleware(request: Request, call_next):
     path = request.url.path
     if auth_gate.is_public_path(path):
         return await call_next(request)
-    if request.client and auth_gate.is_loopback_client(request.client.host):
+    if request.client and auth_gate.is_loopback_request(
+        request.client.host, request.headers.get("host", "")
+    ):
         return await call_next(request)
     token = request.cookies.get(auth_gate.COOKIE_NAME, "")
     if auth_gate.verify_token(token):

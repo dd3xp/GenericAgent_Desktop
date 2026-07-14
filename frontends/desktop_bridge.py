@@ -1630,8 +1630,7 @@ async def auth_middleware(request, handler):
         return await handler(request)
     # 例外:本机进程互调放行(同 conductor.py)。bridge 上跑的 desktop agent
     # 也可能自调 http://127.0.0.1:14168/...,跟"用户在键盘上敲"安全等价。
-    remote_host = (request.remote or "").split(":")[0]
-    if _auth_gate.is_loopback_client(remote_host):
+    if _auth_gate.is_loopback_request(request.remote or "", request.host):
         return await handler(request)
     token = request.cookies.get(_auth_gate.COOKIE_NAME, "")
     if _auth_gate.verify_token(token):

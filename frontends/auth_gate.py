@@ -136,3 +136,21 @@ def is_loopback_client(client_host: str) -> bool:
     都通过 http://127.0.0.1:PORT 调自己的 API,没 cookie 但本质上跟"用户在键盘上敲"
     安全等价。外部走 frp 隧道仍然要 cookie。"""
     return (client_host or "") in _LOOPBACK_HOSTS
+
+
+def _hostname(request_host: str) -> str:
+    value = (request_host or "").strip().lower()
+    if value.startswith("["):
+        end = value.find("]")
+        return value[1:end] if end > 0 else value
+    return value.split(":", 1)[0]
+
+
+def is_loopback_request(client_host: str, request_host: str) -> bool:
+    """Only trust loopback traffic addressed to a loopback Host.
+
+    Local reverse tunnels such as FRP connect to the service from 127.0.0.1 while
+    retaining the public Host header. Treating client_host alone as trusted would
+    therefore bypass authentication for public requests.
+    """
+    return is_loopback_client(client_host) and is_loopback_client(_hostname(request_host))
