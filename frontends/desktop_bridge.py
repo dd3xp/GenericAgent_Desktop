@@ -1644,9 +1644,18 @@ async def auth_middleware(request, handler):
 
 async def auth_page_handler(request):
     """GET /auth — 返回登录/初始化页面。"""
-    static_dir = APP_DIR / "desktop" / "static"
-    return web.FileResponse(static_dir / "auth" / "auth.html",
+    return web.FileResponse(DEFAULT_FRONTEND_DIR / "auth" / "auth.html",
                             headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
+async def auth_asset_handler(request):
+    filename = request.match_info.get("filename") or ""
+    if filename not in {"auth.html", "auth.css", "auth.js"}:
+        raise web.HTTPNotFound()
+    return web.FileResponse(
+        DEFAULT_FRONTEND_DIR / "auth" / filename,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 async def auth_status_handler(request):
@@ -2505,6 +2514,7 @@ def create_app():
     app = web.Application(middlewares=[cors_middleware, auth_middleware], client_max_size=500 * 1024 * 1024)
     # 鉴权页与端点(全部公开,无需 cookie)
     app.router.add_get("/auth", auth_page_handler)
+    app.router.add_get("/auth/{filename:auth\\.(?:html|css|js)}", auth_asset_handler)
     app.router.add_get("/auth/status", auth_status_handler)
     app.router.add_post("/auth/set", auth_set_handler)
     app.router.add_post("/auth/login", auth_login_handler)
