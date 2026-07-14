@@ -42,9 +42,23 @@ import threading, time, traceback, uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
-from aiohttp import web, WSMsgType
+from aiohttp import ClientSession, ClientTimeout, web, WSMsgType
 
 APP_DIR = Path(__file__).resolve().parent
+DEFAULT_FRONTEND_DIR = APP_DIR / "desktop" / "static"
+
+
+def resolve_frontend_dir() -> Path:
+    raw = (os.environ.get("GA_DESKTOP_WEB_ROOT") or "").strip()
+    if raw:
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = APP_DIR / candidate
+        candidate = candidate.resolve()
+        if (candidate / "index.html").is_file():
+            return candidate
+        bridge_print(f"[frontend] invalid GA_DESKTOP_WEB_ROOT={candidate}; using {DEFAULT_FRONTEND_DIR}")
+    return DEFAULT_FRONTEND_DIR
 
 # ─── Bridge self-log ring buffer ───
 import datetime as _dt, io as _io
@@ -2381,6 +2395,111 @@ async def post_token_history_handler(request):
     return json_ok({"ok": True})
 
 
+def _conductor_http_base() -> str:
+    return (os.environ.get("GA_CONDUCTOR_URL") or "http://127.0.0.1:8900").rstrip("/")
+
+
+def _conductor_ws_url() -> str:
+    base = _conductor_http_base()
+    if base.startswith("https://"):
+        base = "wss://" + base[len("https://"):]
+    elif base.startswith("http://"):
+        base = "ws://" + base[len("http://"):]
+    return f"{base}/ws"
+
+
+def _conductor_request_headers(request: web.Request) -> dict:
+    headers = {}
+    for name in ("Accept", "Content-Type", "Cookie", "User-Agent"):
+        value = request.headers.get(name)
+        if value:
+            headers[name] = value
+    return headers
+
+
+async def conductor_http_proxy_handler(request: web.Request):
+    tail = (request.match_info.get("tail") or "").lstrip("/")
+    target = f"{_conductor_http_base()}/{tail}"
+    if request.query_string:
+        target = f"{target}?{request.query_string}"
+    body = await request.read()
+    try:
+        timeout = ClientTimeout(total=65, connect=5)
+        async with ClientSession(timeout=timeout) as client:
+            async with client.request(
+                request.method,
+                target,
+                data=body if body else None,
+                headers=_conductor_request_headers(request),
+                allow_redirects=False,
+            ) as upstream:
+                response_body = await upstream.read()
+                response_headers = {}
+                for name in ("Content-Type", "Cache-Control", "Content-Disposition"):
+                    value = upstream.headers.get(name)
+                    if value:
+                        response_headers[name] = value
+                return web.Response(body=response_body, status=upstream.status, headers=response_headers)
+    except Exception as exc:
+        bridge_print(f"[conductor proxy] {request.method} {target}: {exc}")
+        return json_ok({"error": "conductor_unavailable"}, status=502)
+
+
+async def conductor_ws_proxy_handler(request: web.Request):
+    client = ClientSession(timeout=ClientTimeout(total=None, connect=5))
+    try:
+        upstream = await client.ws_connect(
+            _conductor_ws_url(),
+            headers=_conductor_request_headers(request),
+            heartbeat=30,
+        )
+    except Exception as exc:
+        await client.close()
+        bridge_print(f"[conductor proxy] websocket: {exc}")
+        return json_ok({"error": "conductor_unavailable"}, status=502)
+
+    downstream = web.WebSocketResponse(heartbeat=30)
+    await downstream.prepare(request)
+
+    async def downstream_to_upstream():
+        async for message in downstream:
+            if message.type == WSMsgType.TEXT:
+                await upstream.send_str(message.data)
+            elif message.type == WSMsgType.BINARY:
+                await upstream.send_bytes(message.data)
+            elif message.type in (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.ERROR):
+                break
+
+    async def upstream_to_downstream():
+        async for message in upstream:
+            if message.type == WSMsgType.TEXT:
+                await downstream.send_str(message.data)
+            elif message.type == WSMsgType.BINARY:
+                await downstream.send_bytes(message.data)
+            elif message.type in (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.ERROR):
+                break
+
+    tasks = {
+        asyncio.create_task(downstream_to_upstream()),
+        asyncio.create_task(upstream_to_downstream()),
+    }
+    try:
+        _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        for task in pending:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await upstream.close()
+        await downstream.close()
+        await client.close()
+    return downstream
+
+
 def create_app():
     # 中间件顺序:cors 先把 OPTIONS preflight 短路,auth 再校验 cookie。
     # client_max_size 用 main 提的 500MB(原 auth-gate 只 1MB,跟不上文件上传新需求)。
@@ -2433,9 +2552,13 @@ def create_app():
     app.router.add_post("/services/start-extras", start_extras_handler)
     app.router.add_get("/services/identity", identity_handler)
     app.router.add_post("/services/bridge/exit", bridge_exit_handler)
+    app.router.add_get("/conductor/ws", conductor_ws_proxy_handler)
+    app.router.add_route("*", "/conductor/{tail:.*}", conductor_http_proxy_handler)
 
-    # Serve static frontend (desktop/static/)
-    static_dir = APP_DIR / "desktop" / "static"
+    # The packaged app keeps using desktop/static by default. Servers can point this at a
+    # React production build without copying over the legacy UI or the auth assets.
+    static_dir = resolve_frontend_dir()
+    bridge_print(f"[frontend] serving {static_dir}")
 
     async def index_handler(request):
         return web.FileResponse(

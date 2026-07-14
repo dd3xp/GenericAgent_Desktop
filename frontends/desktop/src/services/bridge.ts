@@ -196,7 +196,8 @@ export async function getMykeyContent(): Promise<string> {
       return res.content;
     } catch { return ''; }
   }
-  return '';
+  const res = await devFetch('/services/mykey') as { content?: string };
+  return res.content || '';
 }
 
 export async function saveMykeyContent(content: string): Promise<void> {
@@ -204,6 +205,10 @@ export async function saveMykeyContent(content: string): Promise<void> {
     await ga()!.saveMykeyContent(content);
     return;
   }
+  await devFetch('/services/mykey', {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
 }
 
 export async function tauriInvoke(cmd: string, args: Record<string, unknown>): Promise<unknown> {
