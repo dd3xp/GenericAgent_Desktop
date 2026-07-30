@@ -20,7 +20,10 @@ from datetime import datetime
 _MODULE_DIR = Path(__file__).resolve().parent          # memory/autonomous_operation_sop/
 _MEMORY_DIR = _MODULE_DIR.parent                       # memory/
 _AGENT_DIR = _MEMORY_DIR.parent                        # GenericAgent/
-_TEMP_DIR = _AGENT_DIR / "temp"                        # GenericAgent/temp/
+import sys as _sys
+if str(_AGENT_DIR) not in _sys.path: _sys.path.insert(0, str(_AGENT_DIR))
+import paths
+_TEMP_DIR = Path(paths.temp_dir())                     # writable data root temp/
 _REPORTS_DIR = _TEMP_DIR / "autonomous_reports"
 _HISTORY_FILE = _REPORTS_DIR / "history.txt"
 _TODO_FILE = _TEMP_DIR / "TODO.txt"

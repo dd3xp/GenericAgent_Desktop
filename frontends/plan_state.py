@@ -19,8 +19,12 @@ Supported task-line shapes (all matched by `extract`):
   5. [D] foo             ← non-standard marker "D" → open (not done)
 """
 from __future__ import annotations
-import os, re
+import os, re, sys
 from typing import Any, Optional
+
+_repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _repo not in sys.path: sys.path.insert(0, _repo)
+import paths
 
 _DONE_CHARS = set("xX✓✔√☑")
 # Newline-insert before a bullet stuck to JSON debris (`{"content": "- [ ] …`).
@@ -94,7 +98,8 @@ def _resolve_stashed(p: str) -> Optional[str]:
     if not p: return None
     rel = p.lstrip("./\\")
     cwd = os.getcwd()
-    for c in (p, os.path.join(cwd, "temp", rel), os.path.join(cwd, rel)):
+    for c in (p, os.path.join(cwd, "temp", rel), os.path.join(cwd, rel),
+              os.path.join(paths.temp_dir(), rel), os.path.join(paths.DATA_DIR, rel)):
         if os.path.isfile(c) and os.path.getsize(c) > 0: return c
     return None
 
@@ -221,7 +226,8 @@ def _resolve_stashed_at(p: str, root: str) -> Optional[str]:
     if not p or not root: return None
     rel = p.lstrip("./\\")
     cwd = root.rstrip("/\\")
-    for c in (p, os.path.join(cwd, "temp", rel), os.path.join(cwd, rel)):
+    for c in (p, os.path.join(cwd, "temp", rel), os.path.join(cwd, rel),
+              os.path.join(paths.temp_dir(), rel), os.path.join(paths.DATA_DIR, rel)):
         if os.path.isfile(c) and os.path.getsize(c) > 0: return c
     return None
 
@@ -242,7 +248,7 @@ def _store_plan_path(path: str, root: str) -> str:
     if not p:
         return ""
     if os.path.isabs(p) and root:
-        for base in (os.path.join(root, "temp"), root):
+        for base in (paths.temp_dir(), os.path.join(root, "temp"), root, paths.DATA_DIR):
             try:
                 rel = os.path.relpath(p, base)
             except ValueError:

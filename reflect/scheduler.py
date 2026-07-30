@@ -12,6 +12,10 @@ INTERVAL = 120
 ONCE = False
 
 _dir = os.path.dirname(os.path.abspath(__file__))
+import sys as _sys
+_repo = os.path.dirname(_dir)
+if _repo not in _sys.path: _sys.path.insert(0, _repo)
+import paths
 TASKS = os.path.join(_dir, '../sche_tasks')
 DONE  = os.path.join(_dir, '../sche_tasks/done')
 _LOG  = os.path.join(_dir, '../sche_tasks/scheduler.log')
@@ -67,7 +71,7 @@ def check():
         try:
             import sys; sys.path.insert(0, os.path.join(_dir, '../memory/L4_raw_sessions'))
             from compress_session import batch_process
-            raw_dir = os.path.join(_dir, '../temp/model_responses')
+            raw_dir = paths.temp_dir('model_responses')
             r = batch_process(raw_dir, dry_run=False)
             print(f'[L4 cron] {r}')
         except Exception as e:

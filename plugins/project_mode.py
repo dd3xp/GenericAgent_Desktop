@@ -14,9 +14,10 @@
 """
 import os
 import plugins.hooks as hooks
+import paths
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_TEMP = os.path.join(_PROJECT_ROOT, 'temp')
+_TEMP = paths.temp_dir()
 
 
 def _active_project(ctx=None):
