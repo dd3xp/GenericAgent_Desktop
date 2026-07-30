@@ -5,23 +5,46 @@ Two roots, split by responsibility so packaged builds stop "sealing" user data:
 - APP_DIR : read-only code + bundled default resources (this repo / the packaged
             bundle). On macOS this lives inside a signed .app and must stay untouched.
 - DATA_DIR: user-writable data root (task outputs under temp/, and memory/). Packaged
-            builds default it to ``~/Documents/GenericAgent`` so users can actually
-            reach their reports and customize memory; source/dev checkouts keep it
-            in-place (== APP_DIR) so the existing developer workflow is unchanged.
+            builds default it to ``~/GenericAgent_Data`` so users can both *reach* their
+            reports (it sits right at the top of the home folder, unlike hidden AppData)
+            and rely on it (the home root itself is never OneDrive/Known-Folder
+            redirected, unlike ~/Documents); source/dev checkouts keep it in-place
+            (== APP_DIR) so the existing developer workflow is unchanged.
 
 Resolution precedence for DATA_DIR (see ``data_dir_for``):
   1. ``GA_DATA_DIR`` environment variable (explicit override, highest priority)
   2. source/dev checkout (the core dir contains ``.git``) -> in-place (== core dir)
-  3. packaged run -> ``~/Documents/GenericAgent``
+  3. packaged run -> ``~/GenericAgent_Data`` (see ``_user_data_root``)
+
+We deliberately do NOT use ``~/Documents``: it depends on the username, is localized,
+and is frequently redirected to OneDrive/Known-Folder placeholders that reject
+directory creation (observed WinError 2/3 on real machines). We also avoid hidden
+platform app-data dirs (``%LOCALAPPDATA%`` / ``~/Library/Application Support``): they
+are reliable but not discoverable, and the whole point here is that users can copy
+their reports out. The home root (``~``/``%USERPROFILE%``) is both reliably writable
+and visible, so a plain ``GenericAgent_Data`` folder there is the best of both.
 
 temp/ and memory/ are relocated together on purpose: the agent reaches memory via
 ``../memory`` relative to its temp cwd, so they must share the same data root.
 """
 
 import os
+import sys
 import shutil
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _user_data_root():
+    """Always-writable *and* discoverable data root: ``~/GenericAgent_Data``.
+
+    The home root is resolved from ``%USERPROFILE%`` (win) / ``$HOME`` (unix), so it
+    never hardcodes a username and is locale-independent. Unlike ~/Documents, the home
+    root itself is never OneDrive/Known-Folder redirected, so directory creation always
+    succeeds; unlike hidden AppData dirs, it is right in front of the user."""
+    home = os.environ.get("USERPROFILE") if sys.platform == "win32" else None
+    home = home or os.path.expanduser("~")
+    return os.path.join(home, "GenericAgent_Data")
 
 
 def data_dir_for(core_dir):
@@ -35,10 +58,10 @@ def data_dir_for(core_dir):
         return os.path.abspath(os.path.expanduser(env))
     core_dir = os.path.abspath(core_dir)
     # A git checkout means a source/developer run -> keep data in-place (no surprise
-    # relocation to Documents). Packaged bundles never ship .git.
+    # relocation). Packaged bundles never ship .git.
     if os.path.isdir(os.path.join(core_dir, ".git")):
         return core_dir
-    return os.path.join(os.path.expanduser("~"), "Documents", "GenericAgent")
+    return _user_data_root()
 
 
 DATA_DIR = data_dir_for(APP_DIR)
