@@ -7,10 +7,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 __all__ = ["plan", "phase", "parallel", "mapchain"]
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path: sys.path.insert(0, _ROOT)
+import paths
 _PORT = int(os.environ.get("GA_ULTRAPLAN_PORT", "47831"))
 _T0 = time(); _phases = []; _phase_stack = []; _tasks = []; _current = "idle"; _events = []; _srv = None; _last = time(); _lock = threading.Lock(); _exec_lock = threading.Lock()
 _TASK_SLUG = "task"; _FUNC_SEQ = 0; _PLANNED = False; _SESSION = None; _sessions = {}
-_RUN_DIR = os.path.abspath(os.environ.get("GA_ULTRAPLAN_RUNDIR", os.path.join(_ROOT, "temp", "ultraplan_default")))
+_RUN_DIR = os.path.abspath(os.environ.get("GA_ULTRAPLAN_RUNDIR", paths.temp_dir("ultraplan_default")))
 os.makedirs(_RUN_DIR, exist_ok=True)
 
 def _bind(rundir):

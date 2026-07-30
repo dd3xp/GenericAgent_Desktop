@@ -85,6 +85,23 @@ def find_default_ga_root() -> Path:
 
 DEFAULT_GA_ROOT = find_default_ga_root()
 
+# Data root split: relocate user-writable data (temp outputs + memory) out of the
+# read-only bundle. The agent core runs in-process (see make_agent), so pinning the
+# shared `paths` module here aligns bridge, in-process core, and spawned services
+# (which inherit GA_DATA_DIR via os.environ) on one writable root.
+_REPO_ROOT = str(APP_DIR.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+import paths  # noqa: E402
+_DATA_ROOT = paths.data_dir_for(str(DEFAULT_GA_ROOT))
+os.environ.setdefault("GA_DATA_DIR", _DATA_ROOT)
+if os.path.abspath(paths.DATA_DIR) != os.path.abspath(_DATA_ROOT):
+    paths.DATA_DIR = _DATA_ROOT
+    paths.TEMP_DIR = os.path.join(_DATA_ROOT, "temp")
+    paths.MEMORY_DIR = os.path.join(_DATA_ROOT, "memory")
+    paths._READY = False
+paths.ensure_ready()
+
 _FINAL_INFO_RE = re.compile(r'\n*`{5}\n*\[Info\] Final response to user\.\n*`{5}\s*$')
 
 
@@ -171,9 +188,9 @@ class AgentManager:
         self.config: Dict[str, Any] = {}
         self.sessions: Dict[str, Session] = {}
         self.active_session_id: Optional[str] = None
-        self._sessions_dir = Path(self.ga_root) / "temp" / "desktop_sessions"
+        self._sessions_dir = Path(paths.temp_dir()) / "desktop_sessions"
         # Legacy monolithic store; migrated into _sessions_dir on first load, then retired.
-        self._sessions_file = Path(self.ga_root) / "temp" / "desktop_sessions.json"
+        self._sessions_file = Path(paths.temp_dir()) / "desktop_sessions.json"
         self._load_sessions()
 
     @property
@@ -1685,7 +1702,7 @@ async def path_open_handler(request):
 # File attachments live under GA's own temp dir (gitignored), NOT the OS temp
 # dir, so they survive bridge restarts. Instead of wiping everything on startup,
 # we keep files for UPLOAD_RETENTION_DAYS and only sweep stale ones.
-_WEB_UPLOAD_DIR = Path(DEFAULT_GA_ROOT) / "temp" / "desktop_uploads"
+_WEB_UPLOAD_DIR = Path(paths.temp_dir()) / "desktop_uploads"
 _WEB_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 UPLOAD_RETENTION_DAYS = 30
@@ -1906,7 +1923,9 @@ def _import_memory_from(source_dir: str, ga_root: str) -> dict:
     temp/model_responses/: 文件名带 pid/logid 天然唯一,只拷目标端不存在的,已存在的跳过。
     """
     src = Path(source_dir).expanduser().resolve()
-    dst_root = Path(ga_root).resolve()
+    # Memory and temp now live under the writable data root, not the (possibly
+    # read-only) code root passed in as ga_root.
+    dst_root = Path(paths.DATA_DIR).resolve()
     if not src.is_dir():
         raise ValueError(f"source is not a directory: {src}")
     if src == dst_root:
@@ -2095,7 +2114,7 @@ _TOKEN_HISTORY_FILE = None
 def _tok_file() -> Path:
     global _TOKEN_HISTORY_FILE
     if _TOKEN_HISTORY_FILE is None:
-        _TOKEN_HISTORY_FILE = Path(manager.ga_root) / "temp" / "desktop_token_history.json"
+        _TOKEN_HISTORY_FILE = Path(paths.temp_dir()) / "desktop_token_history.json"
     return _TOKEN_HISTORY_FILE
 
 async def get_token_history_handler(request):

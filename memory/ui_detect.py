@@ -21,7 +21,10 @@ import json, urllib.request, subprocess, sys, time
 
 #print('[UI DETECT] 截图分析后必须使用物理坐标，ljqCtrl也使用物理坐标！')
 
-DEFAULT_MODEL = str(Path(__file__).resolve().parent.parent / 'temp' / 'weights' / 'icon_detect' / 'model.pt')
+_repo = str(Path(__file__).resolve().parent.parent)
+if _repo not in sys.path: sys.path.insert(0, _repo)
+import paths
+DEFAULT_MODEL = paths.temp_dir('weights', 'icon_detect', 'model.pt')
 
 try:
     from rapidocr_onnxruntime import RapidOCR

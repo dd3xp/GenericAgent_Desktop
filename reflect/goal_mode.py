@@ -7,10 +7,14 @@ INTERVAL = 5   # check间隔短，agent跑完立刻再检查
 ONCE = False
 
 _dir = os.path.dirname(os.path.abspath(__file__))
+import sys as _sys
+_repo = os.path.dirname(_dir)
+if _repo not in _sys.path: _sys.path.insert(0, _repo)
+import paths
 STATE_FILE = ''
 def init(a):
     global STATE_FILE
-    STATE_FILE = a.get('goal_state') or os.environ.get('GOAL_STATE') or os.path.join(_dir, '../temp/goal_state.json')
+    STATE_FILE = a.get('goal_state') or os.environ.get('GOAL_STATE') or paths.temp_dir('goal_state.json')
     if not os.path.isabs(STATE_FILE): STATE_FILE = os.path.join(_dir, '..', STATE_FILE)
 # --- state 管理 ---
 def _load():

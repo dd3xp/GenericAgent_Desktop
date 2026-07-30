@@ -9,8 +9,12 @@ Subagent processes are out-of-process, so `scan_subagent_logs` parses the
 same `[Cache]` / `[Output]` print lines from `temp/*/stdout.log`.
 """
 from __future__ import annotations
-import glob, os, re, threading, time
+import glob, os, re, sys, threading, time
 from dataclasses import dataclass, field
+
+_repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _repo not in sys.path: sys.path.insert(0, _repo)
+import paths
 
 
 @dataclass
@@ -76,7 +80,7 @@ def scan_subagent_logs(since: float = 0.0, root: str | None = None) -> TokenStat
     `since=tui_start_time` to scope to this run. Best-effort: bad logs skipped."""
     out = TokenStats()
     if since > 0: out.started_at = since
-    pattern = os.path.join(root, _SUBAGENT_GLOB) if root else _SUBAGENT_GLOB
+    pattern = os.path.join(root, _SUBAGENT_GLOB) if root else os.path.join(paths.temp_dir(), "*", "stdout.log")
     for p in glob.glob(pattern):
         try:
             if since and os.path.getmtime(p) < since: continue

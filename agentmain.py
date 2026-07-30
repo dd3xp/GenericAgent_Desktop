@@ -12,6 +12,7 @@ try:
     from plugins.hooks import discover_and_load; discover_and_load()
 except Exception: pass
 from ga import GenericAgentHandler, smart_format, get_global_memory, format_error, consume_file
+import paths
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 BANNED_TOOLS = (['ask_user', 'start_long_term_update'] if '--no-user-tools' in sys.argv else [])
@@ -23,7 +24,7 @@ def load_tool_schema(suffix=''):
 load_tool_schema()
 
 lang_suffix = '_en' if os.environ.get('GA_LANG', '') == 'en' else ''
-mem_dir = os.path.join(script_dir, 'memory')
+mem_dir = paths.memory_dir()
 if not os.path.exists(mem_dir): os.makedirs(mem_dir)
 mem_txt = os.path.join(mem_dir, 'global_mem.txt')
 if not os.path.exists(mem_txt): open(mem_txt, 'w', encoding='utf-8').write('# [Global Memory - L2]\n')
@@ -44,7 +45,7 @@ def get_system_prompt():
 # output2_queue = agent.put_task(prompt2)
 class GenericAgent:
     def __init__(self):
-        os.makedirs(os.path.join(script_dir, 'temp'), exist_ok=True)
+        os.makedirs(paths.temp_dir(), exist_ok=True)
         self.lock = threading.Lock()
         self.task_dir = None
         self.history = []; self.handler = None; 
@@ -54,7 +55,7 @@ class GenericAgent:
         self.peer_hint = True
         self.force_non_stream = False
         logid = f'{(time.time_ns() + random.randrange(1_000_000)) % 1_000_000:06d}'
-        self.log_path = os.path.join(script_dir, f'temp/model_responses/model_responses_{logid}.txt')
+        self.log_path = paths.temp_dir('model_responses', f'model_responses_{logid}.txt')
         self.llmclient = None
         self.load_llm_sessions()
         self.extra_sys_prompts = []
@@ -122,7 +123,7 @@ class GenericAgent:
         if not raw_query.startswith('/'): return raw_query
         if _sm := re.match(r'/session\.(\w+)=(.*)', raw_query.strip()):
             k, v = _sm.group(1), _sm.group(2)
-            vfile = os.path.join(script_dir, 'temp', v)
+            vfile = paths.temp_dir(v)
             if os.path.isfile(vfile): v = open(vfile, encoding='utf-8').read().strip()
             try: v = json.loads(v)  # cover number parsing
             except (json.JSONDecodeError, ValueError): pass
@@ -143,14 +144,14 @@ class GenericAgent:
                 self.task_queue.task_done(); continue
             self.is_running = True
             if len(raw_query) > 2000:
-                task_file = os.path.join(script_dir, 'temp', f'user_prompt_{os.getpid()}_{time.time_ns()}.md')
+                task_file = paths.temp_dir(f'user_prompt_{os.getpid()}_{time.time_ns()}.md')
                 with open(task_file, 'w', encoding='utf-8') as f: f.write(raw_query)
                 raw_query = f'Long user prompt saved to {task_file}. Read and execute.'
             rquery = smart_format(raw_query.replace('\n', ' '), max_str_len=200)
             self.history.append(f"[USER]: {rquery}")
             sys_prompt = get_system_prompt() + '\n'.join(self.extra_sys_prompts) + getattr(self.llmclient.backend, 'extra_sys_prompt', '')
             if self.peer_hint: sys_prompt += f"\n[Peer] 用户提及其他会话/后台任务状态时: temp/model_responses/ (只找近期修改的文件尾部)\n"
-            handler = GenericAgentHandler(self, self.history, os.path.join(script_dir, 'temp'))
+            handler = GenericAgentHandler(self, self.history, paths.temp_dir())
             if getattr(self, 'no_print', False): handler.print = lambda *a, **k: None
             if self.handler and 'key_info' in self.handler.working: 
                 ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', self.handler.working['key_info'])  # 去旧
@@ -213,7 +214,7 @@ if __name__ == '__main__':
         import subprocess, platform
         cmd = [sys.executable, os.path.abspath(__file__)] + [a for a in sys.argv[1:]] + ['--nobg']
         if args.task:
-            d = os.path.join(script_dir, f'temp/{args.task}'); os.makedirs(d, exist_ok=True)
+            d = paths.temp_dir(args.task); os.makedirs(d, exist_ok=True)
             out = open(os.path.join(d, 'stdout.log'), 'w', encoding='utf-8')
             err = open(os.path.join(d, 'stderr.log'), 'w', encoding='utf-8')
         else: out, err = subprocess.DEVNULL, subprocess.DEVNULL
@@ -230,7 +231,7 @@ if __name__ == '__main__':
 
     histfile = args.history
     if args.task:
-        agent.task_dir = d = os.path.join(script_dir, f'temp/{args.task}'); nround = ''
+        agent.task_dir = d = paths.temp_dir(args.task); nround = ''
         infile = os.path.join(d, 'input.txt'); outfile = f'{d}/output{nround}.txt'
         if args.input:
             os.makedirs(d, exist_ok=True)
@@ -288,7 +289,7 @@ if __name__ == '__main__':
                 except Exception as e:
                     if getattr(mod, 'ONCE', False): raise
                     print(f'[Reflect] drain error: {e}'); result = f'[ERROR] {e}'
-                log_dir = os.path.join(script_dir, 'temp/reflect_logs'); os.makedirs(log_dir, exist_ok=True)
+                log_dir = paths.temp_dir('reflect_logs'); os.makedirs(log_dir, exist_ok=True)
                 script_name = os.path.splitext(os.path.basename(args.reflect))[0]
                 open(os.path.join(log_dir, f'{script_name}_{datetime.now():%Y-%m-%d}.log'), 'a', encoding='utf-8').write(f'[{datetime.now():%m-%d %H:%M}]\n{result}\n\n')
                 if (on_done := getattr(mod, 'on_done', None)):
