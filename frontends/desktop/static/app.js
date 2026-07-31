@@ -292,6 +292,10 @@ let bridgeUiOffline = false;
     getGaSource: () => tauriInvoke('get_ga_source'),
     setGaSource: (dir) => tauriInvoke('set_ga_source', { dir }),
     clearGaSource: () => tauriInvoke('clear_ga_source'),
+    getDataDirOverride: () => tauriInvoke('get_data_dir_override'),
+    setDataDir: (dir) => tauriInvoke('set_data_dir', { dir }),
+    clearDataDir: () => tauriInvoke('clear_data_dir'),
+    moveDataDir: (current, dir) => tauriInvoke('move_data_dir', { current, dir }),
     getConductorModel: () => rpc('services/conductor/model/get', {}),
     saveConductorModel: (llmNo) => rpc('services/conductor/model/save', { llmNo }),
     tauriInvoke,
@@ -729,6 +733,85 @@ bindClick('open-data-dir-btn', async (e) => {
     showChanToast(t('err.openDataDir'), err.message || String(err), 'err');
   }
 });
+const dataDirCurrentEl = document.getElementById('data-dir-current');
+const dataDirClearBtn = document.getElementById('data-dir-clear-btn');
+async function refreshDataDir() {
+  const cur = state.dataDir || '';
+  let override = '';
+  if (window.__TAURI__?.core?.invoke) {
+    try { override = await window.ga.getDataDirOverride(); } catch (_) { override = ''; }
+  }
+  if (dataDirCurrentEl) {
+    if (cur || override) {
+      dataDirCurrentEl.textContent = `${t('set.dataDirCurrent')}: ${cur || override}${override ? '' : ` (${t('set.dataDirDefault')})`}`;
+      dataDirCurrentEl.hidden = false;
+    } else {
+      dataDirCurrentEl.hidden = true;
+    }
+  }
+  if (dataDirClearBtn) dataDirClearBtn.hidden = !override;
+}
+bindClick('select-data-dir-btn', async (e) => {
+  e.stopPropagation();
+  if (!window.__TAURI__?.core?.invoke) {
+    showChanToast(t('err.dataDirDesktopOnly'), '', 'err');
+    return;
+  }
+  try {
+    const dir = await window.ga.tauriInvoke('pick_directory', { title: t('sys.dataDirPickTitle') });
+    if (!dir) return;
+    showChanToast(t('sys.dataDirSwitching'), dir, 'ok');
+    const saved = await window.ga.setDataDir(dir);
+    state.dataDir = saved;
+    await refreshDataDir();
+    showChanToast(t('sys.dataDirSet'), saved, 'ok');
+  } catch (err) {
+    showChanToast(t('err.dataDirSet'), err.message || String(err), 'err');
+  }
+});
+bindClick('move-data-dir-btn', async (e) => {
+  e.stopPropagation();
+  if (!window.__TAURI__?.core?.invoke) {
+    showChanToast(t('err.dataDirDesktopOnly'), '', 'err');
+    return;
+  }
+  try {
+    const dir = await window.ga.tauriInvoke('pick_directory', { title: t('sys.dataDirMoveTitle') });
+    if (!dir) return;
+    const current = state.dataDir || '';
+    const confirmed = await showConfirmDialog({
+      title: t('confirm.moveDataDirTitle'),
+      message: `${t('confirm.moveDataDir')}\n\n${current}\n→\n${dir}`,
+      okText: t('set.moveDataDir'),
+    });
+    if (!confirmed) return;
+    showChanToast(t('sys.dataDirMoving'), dir, 'ok');
+    const saved = await window.ga.moveDataDir(current, dir);
+    state.dataDir = saved;
+    await refreshDataDir();
+    showChanToast(t('sys.dataDirMoved'), saved, 'ok');
+  } catch (err) {
+    showChanToast(t('err.dataDirMove'), err.message || String(err), 'err');
+  }
+});
+bindClick('data-dir-clear-btn', async (e) => {
+  e.stopPropagation();
+  const confirmed = await showConfirmDialog({
+    title: t('confirm.dataDirClearTitle'),
+    message: t('confirm.dataDirClear'),
+    okText: t('set.dataDirClear'),
+  });
+  if (!confirmed) return;
+  try {
+    showChanToast(t('sys.dataDirSwitching'), '', 'ok');
+    await window.ga.clearDataDir();
+    await loadBridgeConfig();
+    await refreshDataDir();
+    showChanToast(t('sys.dataDirCleared'), '', 'ok');
+  } catch (err) {
+    showChanToast(t('err.dataDirSet'), err.message || String(err), 'err');
+  }
+});
 const gaSourceCurrentEl = document.getElementById('ga-source-current');
 const gaSourceClearBtn = document.getElementById('ga-source-clear-btn');
 async function refreshGaSource() {
@@ -757,6 +840,7 @@ bindClick('ga-source-btn', async (e) => {
     showChanToast(t('sys.gaSourceSwitching'), dir, 'ok');
     const project = await window.ga.setGaSource(dir);
     await refreshGaSource();
+    await refreshDataDir();
     showChanToast(t('sys.gaSourceSet'), project || dir, 'ok');
   } catch (err) {
     showChanToast(t('err.gaSourceSet'), err.message || String(err), 'err');
@@ -774,12 +858,14 @@ bindClick('ga-source-clear-btn', async (e) => {
     showChanToast(t('sys.gaSourceSwitching'), '', 'ok');
     await window.ga.clearGaSource();
     await refreshGaSource();
+    await refreshDataDir();
     showChanToast(t('sys.gaSourceCleared'), '', 'ok');
   } catch (err) {
     showChanToast(t('err.gaSourceSet'), err.message || String(err), 'err');
   }
 });
 refreshGaSource();
+refreshDataDir();
 // 侧边栏「快速接入」：点击官方模型按钮 → 打开预填好的添加模型表单
 const pqEl = document.getElementById('provider-quickstart');
 if (pqEl) pqEl.addEventListener('click', (e) => {
@@ -3971,6 +4057,7 @@ async function loadBridgeConfig() {
   try {
     const res = await window.ga.getConfig();
     const cfg = res?.config || {};
+    state.dataDir = res?.dataDir || state.dataDir || '';
     if (LANGS.includes(cfg.lang)) {
       lang = cfg.lang;
       applyI18n();

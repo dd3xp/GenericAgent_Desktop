@@ -1515,7 +1515,7 @@ async def get_config_handler(request):
         cfg["llmNo"] = active
     cfg.update(_desktop_ui())
     cfg["conductor"] = _conductor_settings()
-    return json_ok({"gaRoot": manager.ga_root, "mykeyPath": manager.mykey_path, "config": cfg})
+    return json_ok({"gaRoot": manager.ga_root, "dataDir": paths.DATA_DIR, "mykeyPath": manager.mykey_path, "config": cfg})
 
 
 async def save_config_handler(request):
