@@ -24,7 +24,18 @@ C = {
 }
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MYKPY_PATH = os.path.join(PROJECT_ROOT, 'mykey.py')
+# P1-D: write credentials to the user-writable data root (packaged bundle is read-only).
+# Falls back to the project root for plain source checkouts where paths is unavailable
+# or DATA_DIR == PROJECT_ROOT anyway.
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+try:
+    import paths as _paths
+    MYKPY_PATH = _paths.mykey_path()
+    _BACKUP_DIR = _paths.DATA_DIR
+except Exception:
+    MYKPY_PATH = os.path.join(PROJECT_ROOT, 'mykey.py')
+    _BACKUP_DIR = PROJECT_ROOT
 
 # ── 模型厂商定义 ───────────────────────────────────────────────────────────
 
@@ -1246,7 +1257,7 @@ def _backup_with_name(model_names, platform_ids):
         safe_name = 'mykey_backup'  # 避免和源文件同名
     if len(safe_name) > 100:
         safe_name = safe_name[:100]
-    backup_path = os.path.join(PROJECT_ROOT, f'{safe_name}.py')
+    backup_path = os.path.join(_BACKUP_DIR, f'{safe_name}.py')
     shutil.copy2(MYKPY_PATH, backup_path)
     return backup_path
 
@@ -1371,6 +1382,7 @@ def main():
         print(f"\n  {C['green']}✓ 旧配置已备份至:{C['reset']} {C['dim']}{backup}{C['reset']}")
 
     # 写入
+    os.makedirs(os.path.dirname(MYKPY_PATH), exist_ok=True)
     with open(MYKPY_PATH, 'w', encoding='utf-8') as f:
         f.write(content)
     print(f"\n  {C['green']}✓ mykey.py 已生成!{C['reset']}")

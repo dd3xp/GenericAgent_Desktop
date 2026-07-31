@@ -7,9 +7,32 @@ if _ROOT not in sys.path: sys.path.append(_ROOT)
 
 def _load_mykeys():
     global _mykey_path
+    # P1-D: credentials live on the writable data side (packaged builds can't write the
+    # read-only bundle). Prefer DATA_DIR/mykey.py, then an in-place/dev mykey.py, then the
+    # legacy sys.path `import mykey`, then mykey.json. Loaded via an explicit spec (not by
+    # putting DATA_DIR on sys.path) so we don't accidentally shadow the `memory` package,
+    # which must keep importing from APP_DIR.
+    import importlib.util
+    cand = None
     try:
+        import paths
+        p = paths.mykey_path()
+        if os.path.isfile(p):
+            cand = p
+        elif os.path.isfile(os.path.join(paths.APP_DIR, 'mykey.py')):
+            cand = os.path.join(paths.APP_DIR, 'mykey.py')
+    except Exception:
+        cand = None
+    try:
+        if cand:
+            spec = importlib.util.spec_from_file_location('mykey', cand)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules['mykey'] = mod
+            spec.loader.exec_module(mod)
+            _mykey_path = cand
+            return {k: v for k, v in vars(mod).items() if not k.startswith('_')}
         sys.modules.pop('mykey', None)
-        import mykey; _mykey_path = mykey.__file__
+        import mykey; importlib.reload(mykey); _mykey_path = mykey.__file__
         return {k: v for k, v in vars(mykey).items() if not k.startswith('_')}
     except ImportError as e:
         if getattr(e, 'name', None) != 'mykey':
