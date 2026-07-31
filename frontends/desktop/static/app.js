@@ -279,6 +279,9 @@ let bridgeUiOffline = false;
     selectGaRoot: () => rpc('app/path/selectGaRoot', {}),
     openMykeyTemplate: () => rpc('app/path/open', { kind: 'mykeyTemplate' }),
     openMykey: () => rpc('app/path/open', { kind: 'mykey' }),
+    openDataDir: () => rpc('app/path/open', { kind: 'dataDir' }),
+    openMemoryDir: () => rpc('app/path/open', { kind: 'memoryDir' }),
+    openSysPromptOverride: () => rpc('app/path/open', { kind: 'sysPromptOverride' }),
     startService,
     stopService,
     getServiceLogs: (id, tail = 200) => rpc('services/logs', { id, tail }),
@@ -714,6 +717,16 @@ bindClick('import-memory-btn', async (e) => {
     await importMemoryFromDir();
   } catch (err) {
     showChanToast(t('err.memoryImport'), err.message || String(err), 'err');
+  }
+});
+// 打开可写数据文件夹（报告 temp/ 与记忆 memory/ 所在），方便用户取用/编辑。
+bindClick('open-data-dir-btn', async (e) => {
+  e.stopPropagation();
+  try {
+    const res = await window.ga.openDataDir();
+    if (res && res.ok === false) throw new Error(res.error || 'open failed');
+  } catch (err) {
+    showChanToast(t('err.openDataDir'), err.message || String(err), 'err');
   }
 });
 const gaSourceCurrentEl = document.getElementById('ga-source-current');

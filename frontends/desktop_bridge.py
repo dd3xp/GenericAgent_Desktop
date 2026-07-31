@@ -195,7 +195,8 @@ class AgentManager:
 
     @property
     def mykey_path(self) -> str:
-        return str(Path(self.ga_root) / "mykey.py")
+        # P1-D: credentials live on the writable data side (packaged bundle is read-only).
+        return str(Path(paths.mykey_path()))
 
     def _session_dict(self, s: "Session") -> dict:
         llm_hist = None
@@ -350,8 +351,11 @@ class AgentManager:
         return {"sessionsAdded": added, "sessionsSkipped": skipped, "sessionsFileFound": True}
 
     def _mykey_file(self) -> Path:
-        p = Path(self.ga_root) / "mykey.py"
+        # P1-D: mykey.py on the writable data side; seed from the bundled template in the
+        # read-only core dir when absent so first-run editing works in packaged builds.
+        p = Path(paths.mykey_path())
         if not p.exists():
+            p.parent.mkdir(parents=True, exist_ok=True)
             tpl = Path(self.ga_root) / "mykey_template.py"
             p.write_text(tpl.read_text(encoding="utf-8") if tpl.exists() else "", encoding="utf-8")
         return p
@@ -1077,13 +1081,19 @@ _SERVICE_KEYS: Dict[str, tuple] = {
 
 
 def _load_mykeys(ga_root: Path) -> dict:
-    if not (ga_root / "mykey.py").exists():
-        return {}
-    root = str(ga_root.resolve())
-    if root not in sys.path:
-        sys.path.insert(0, root)
-    import mykey as mk
-    importlib.reload(mk)
+    # P1-D: prefer the writable data-side mykey.py; fall back to an in-place/dev one.
+    # Loaded via an explicit spec (not sys.path) so we don't shadow the memory package.
+    import importlib.util
+    cand = paths.mykey_path()
+    if not os.path.isfile(cand):
+        alt = ga_root / "mykey.py"
+        if not alt.exists():
+            return {}
+        cand = str(alt)
+    spec = importlib.util.spec_from_file_location("mykey", cand)
+    mk = importlib.util.module_from_spec(spec)
+    sys.modules["mykey"] = mk
+    spec.loader.exec_module(mk)
     return {k: v for k, v in vars(mk).items() if not k.startswith("_")}
 
 
@@ -1666,8 +1676,41 @@ async def path_open_handler(request):
     data = await read_json(request)
     kind = data.get("kind", "")
     mode = data.get("mode", "open")
-    if kind == "mykey":
-        target = Path(manager.ga_root) / "mykey.py"
+    # P1-C / discoverability: open the user's writable data locations in the OS file
+    # manager so reports/memory are reachable without hunting for the folder.
+    _dir_kinds = {
+        "dataDir": paths.DATA_DIR,
+        "memoryDir": paths.memory_dir(),
+        "tempDir": paths.temp_dir(),
+    }
+    if kind in _dir_kinds:
+        target = Path(_dir_kinds[kind])
+        try:
+            paths.ensure_ready()
+            target.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        if not target.exists():
+            return json_ok({"ok": False, "error": f"Folder not found: {target}"}, status=404)
+        try:
+            _open_path_default(target.resolve())  # open the folder itself in Explorer/Finder
+        except OSError as e:
+            return json_ok({"ok": False, "error": str(e), "path": str(target)}, status=500)
+        return json_ok({"ok": True, "path": str(target.resolve())})
+    if kind == "sysPromptOverride":
+        # P1-A entry: open (creating if needed) the user system-prompt override file.
+        target = Path(paths.sys_prompt_override())
+        if not target.exists():
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(
+                    "# GenericAgent — user system-prompt override\n"
+                    "# 这里写的内容会追加到内置系统提示之后。留空则不生效。\n\n",
+                    encoding="utf-8")
+            except Exception:
+                pass
+    elif kind == "mykey":
+        target = Path(paths.mykey_path())
         if not target.exists():
             template = Path(manager.ga_root) / "mykey_template.py"
             target = template if template.exists() else target
@@ -1886,10 +1929,11 @@ def _open_path_default(target: Path) -> None:
 
 
 def _mykey_file() -> Path:
-    root = Path(manager.ga_root)
-    target = root / "mykey.py"
+    # P1-D: mykey.py on the writable data side; seed from the bundled template when absent.
+    target = Path(paths.mykey_path())
     if not target.is_file():
-        template = root / "mykey_template.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        template = Path(manager.ga_root) / "mykey_template.py"
         if template.is_file():
             target.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
     return target

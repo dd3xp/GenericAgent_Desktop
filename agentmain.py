@@ -41,6 +41,16 @@ if not os.path.exists(cdp_cfg):
 
 def get_system_prompt():
     with open(os.path.join(script_dir, f'assets/sys_prompt{lang_suffix}.txt'), 'r', encoding='utf-8') as f: prompt = f.read()
+    # P1-A: layer an optional user override from the writable data root on top of the
+    # bundled baseline. Kept as an append (not a replace) so the agent never loses its
+    # core operating contract; users add house rules without editing the read-only bundle.
+    try:
+        ov = paths.sys_prompt_override(lang_suffix)
+        if os.path.isfile(ov):
+            with open(ov, 'r', encoding='utf-8') as f:
+                extra = f.read().strip()
+            if extra: prompt += f"\n\n# ── User overrides (sys_prompt_override) ──\n{extra}\n"
+    except Exception: pass
     prompt += f"\nToday: {time.strftime('%Y-%m-%d %a')}\n"
     prompt += get_global_memory()
     return prompt
