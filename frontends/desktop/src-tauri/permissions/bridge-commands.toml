@@ -47,3 +47,23 @@ commands.allow = ["shortcut_should_ask"]
 identifier = "allow-shortcut-decide"
 description = "Persist the user's desktop-shortcut choice and create it if enabled."
 commands.allow = ["shortcut_decide"]
+
+[[permission]]
+identifier = "allow-get-data-dir-override"
+description = "Read the user-selected GenericAgent data directory override."
+commands.allow = ["get_data_dir_override"]
+
+[[permission]]
+identifier = "allow-set-data-dir"
+description = "Set the GenericAgent data directory override and restart the bridge."
+commands.allow = ["set_data_dir"]
+
+[[permission]]
+identifier = "allow-clear-data-dir"
+description = "Clear the GenericAgent data directory override and restart the bridge."
+commands.allow = ["clear_data_dir"]
+
+[[permission]]
+identifier = "allow-move-data-dir"
+description = "Move current data directory under a selected parent, delete the old directory, set it, and restart the bridge."
+commands.allow = ["move_data_dir"]
