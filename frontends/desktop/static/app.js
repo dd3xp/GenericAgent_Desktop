@@ -279,6 +279,10 @@ let bridgeUiOffline = false;
     selectGaRoot: () => rpc('app/path/selectGaRoot', {}),
     openMykeyTemplate: () => rpc('app/path/open', { kind: 'mykeyTemplate' }),
     openMykey: () => rpc('app/path/open', { kind: 'mykey' }),
+    openTempDir: () => rpc('app/path/open', { kind: 'tempDir' }),
+    openMemoryDir: () => rpc('app/path/open', { kind: 'memoryDir' }),
+    openAssetsDir: () => rpc('app/path/open', { kind: 'assetsDir' }),
+    openRuntimeDir: () => rpc('app/path/open', { kind: 'runtimeDir' }),
     startService,
     stopService,
     getServiceLogs: (id, tail = 200) => rpc('services/logs', { id, tail }),
@@ -621,6 +625,18 @@ bindClick('add-model-btn', (e) => {
 });
 bindClick('settings-btn',  (e) => { e.stopPropagation(); openSettings(); });
 bindClick('settings-services-btn', (e) => { e.stopPropagation(); openServiceManagerFromSettings(); });
+
+async function openDataFolder(action) {
+  try {
+    await action();
+  } catch (err) {
+    showChanToast(t('err.openDataDir'), err.message || String(err), 'err');
+  }
+}
+bindClick('open-temp-dir-btn', (e) => { e.stopPropagation(); openDataFolder(() => window.ga.openTempDir()); });
+bindClick('open-memory-dir-btn', (e) => { e.stopPropagation(); openDataFolder(() => window.ga.openMemoryDir()); });
+bindClick('open-assets-dir-btn', (e) => { e.stopPropagation(); openDataFolder(() => window.ga.openAssetsDir()); });
+bindClick('open-runtime-dir-btn', (e) => { e.stopPropagation(); openDataFolder(() => window.ga.openRuntimeDir()); });
 
 const importMykeyInput = document.getElementById('import-mykey-input');
 async function importMykeyFromFile(file) {

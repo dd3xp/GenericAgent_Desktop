@@ -1656,6 +1656,14 @@ async def path_open_handler(request):
             target = template if template.exists() else target
     elif kind == "mykeyTemplate":
         target = Path(manager.ga_root) / "mykey_template.py"
+    elif kind == "tempDir":
+        target = Path(manager.ga_root) / "temp"
+    elif kind == "memoryDir":
+        target = Path(manager.ga_root) / "memory"
+    elif kind == "assetsDir":
+        target = Path(manager.ga_root) / "assets"
+    elif kind == "runtimeDir":
+        target = Path(manager.ga_root)
     elif kind == "upload":
         raw = Path(data.get("path") or "")
         try:
@@ -1673,6 +1681,8 @@ async def path_open_handler(request):
     try:
         if mode == "reveal":
             _reveal_path_in_file_manager(target)
+        elif target.is_dir():
+            _open_path_default(target)  # 数据/运行目录用系统文件管理器打开
         elif kind == "upload":
             _open_path_default(target)  # 用户文件用系统默认程序(open 动词),避免 edit 动词 fallback 记事本
         else:
