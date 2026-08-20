@@ -44,18 +44,36 @@ def has(event):
 
 
 def discover_and_load(plugin_dir=None):
+    # Bundled plugins: the real ``plugins`` package under APP_DIR.
     if plugin_dir is None:
         plugin_dir = os.path.join(_PROJECT_ROOT, 'plugins')
-    if not os.path.isdir(plugin_dir):
+    if os.path.isdir(plugin_dir):
+        parent = os.path.dirname(plugin_dir)
+        if parent not in sys.path:
+            sys.path.insert(0, parent)
+        for fn in sorted(os.listdir(plugin_dir)):
+            if fn.startswith('_') or not fn.endswith('.py'):
+                continue
+            load(fn[:-3])
+    # P1-B: user drop-in plugins from the writable data root, so custom plugins
+    # survive upgrades and don't require touching the read-only bundle.
+    _load_user_plugins()
+
+
+def _load_user_plugins():
+    try:
+        import paths
+        dirs = paths.plugin_dirs()
+    except Exception:
         return
-    parent = os.path.dirname(plugin_dir)
-    if parent not in sys.path:
-        sys.path.insert(0, parent)
-    for fn in sorted(os.listdir(plugin_dir)):
-        if fn.startswith('_') or not fn.endswith('.py'):
-            continue
-        name = fn[:-3]
-        load(name)
+    bundled = os.path.abspath(os.path.join(_PROJECT_ROOT, 'plugins'))
+    for d in dirs:
+        if os.path.abspath(d) == bundled or not os.path.isdir(d):
+            continue  # bundled dir already handled above
+        for fn in sorted(os.listdir(d)):
+            if fn.startswith('_') or not fn.endswith('.py'):
+                continue
+            load_file(os.path.join(d, fn))
 
 
 def load(name):
@@ -64,4 +82,23 @@ def load(name):
         return True
     except Exception as e:
         sys.stderr.write(f"[hooks] plugin '{name}' load failed: {e}\n")
+        return False
+
+
+def load_file(path):
+    """Load a standalone user plugin by file path (outside the ``plugins`` package).
+
+    Registers under a unique synthetic module name so it never collides with a bundled
+    ``plugins.<name>``. The file only needs ``from plugins.hooks import register`` to hook
+    into the shared registry, so any module name works."""
+    import importlib.util
+    name = 'ga_user_plugin_' + os.path.splitext(os.path.basename(path))[0]
+    try:
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+        return True
+    except Exception as e:
+        sys.stderr.write(f"[hooks] user plugin '{path}' load failed: {e}\n")
         return False

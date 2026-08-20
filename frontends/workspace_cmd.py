@@ -36,10 +36,13 @@ from typing import Optional
 # 路径基准(与 plugins/project_mode.py 的 _TEMP 保持一致)
 # --------------------------------------------------------------------------- #
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+import paths
 
 
 def _temp_root() -> str:
-    return os.path.join(_REPO_ROOT, "temp")
+    return paths.temp_dir()
 
 
 def _projects_root() -> str:

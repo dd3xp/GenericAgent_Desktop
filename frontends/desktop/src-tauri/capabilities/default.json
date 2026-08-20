@@ -23,6 +23,10 @@
     "allow-set-ga-source",
     "allow-clear-ga-source",
     "allow-shortcut-should-ask",
-    "allow-shortcut-decide"
+    "allow-shortcut-decide",
+    "allow-get-data-dir-override",
+    "allow-set-data-dir",
+    "allow-clear-data-dir",
+    "allow-move-data-dir"
   ]
 }

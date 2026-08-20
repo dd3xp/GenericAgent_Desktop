@@ -196,6 +196,47 @@ fn write_shortcut_pref(enabled: bool) {
     merge_settings(serde_json::json!({ "desktop_shortcut": enabled }));
 }
 
+/// User-selected data directory override. Empty means the Python paths.py default
+/// (~/GenericAgent_Data, or in-place for source/dev checkouts).
+fn data_dir_override() -> Option<String> {
+    let s = read_settings()
+        .get("data_dir_override")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if s.is_empty() { None } else { Some(s) }
+}
+
+fn set_data_dir_override_value(dir: &str) -> Result<String, String> {
+    let p = PathBuf::from(dir);
+    std::fs::create_dir_all(&p).map_err(|e| format!("cannot create data dir: {}", e))?;
+    let canon = p.canonicalize().unwrap_or(p);
+    merge_settings(serde_json::json!({ "data_dir_override": canon.to_string_lossy().to_string() }));
+    Ok(canon.to_string_lossy().to_string())
+}
+
+fn copy_dir_replace(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|e| format!("create {:?}: {}", dst, e))?;
+    for entry in std::fs::read_dir(src).map_err(|e| format!("read {:?}: {}", src, e))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let sp = entry.path();
+        let dp = dst.join(entry.file_name());
+        let ft = entry.file_type().map_err(|e| e.to_string())?;
+        if ft.is_dir() {
+            if dp.exists() && !dp.is_dir() {
+                std::fs::remove_file(&dp).map_err(|e| format!("remove {:?}: {}", dp, e))?;
+            }
+            copy_dir_replace(&sp, &dp)?;
+        } else if ft.is_file() {
+            if let Some(parent) = dp.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            std::fs::copy(&sp, &dp).map_err(|e| format!("copy {:?} -> {:?}: {}", sp, dp, e))?;
+        }
+    }
+    Ok(())
+}
 /// Create (or overwrite) a desktop shortcut pointing at the CURRENT exe. Overwriting on every
 /// enabled launch is what makes the portable bundle relocatable: move the folder, relaunch, and
 /// the shortcut is rewritten to the new path. Windows-only (uses a .lnk via WScript.Shell).
@@ -479,6 +520,10 @@ fn sanitize_bundle_env(cmd: &mut Command) {
     match valid_ga_source_override() {
         Some(src) => { cmd.env("GA_ROOT", src); }
         None => { cmd.env_remove("GA_ROOT"); }
+    }
+    match data_dir_override() {
+        Some(dir) => { cmd.env("GA_DATA_DIR", dir); }
+        None => { cmd.env_remove("GA_DATA_DIR"); }
     }
 }
 
@@ -876,6 +921,64 @@ fn get_ga_source() -> String {
         .to_string()
 }
 
+#[tauri::command]
+fn get_data_dir_override() -> String {
+    data_dir_override().unwrap_or_default()
+}
+
+#[tauri::command]
+fn set_data_dir(app_handle: tauri::AppHandle, dir: String) -> Result<String, String> {
+    let saved = set_data_dir_override_value(&dir)?;
+    switch_bridge(&app_handle)?;
+    Ok(saved)
+}
+
+#[tauri::command]
+fn clear_data_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
+    remove_setting("data_dir_override");
+    switch_bridge(&app_handle)?;
+    Ok(String::new())
+}
+
+#[tauri::command]
+fn move_data_dir(app_handle: tauri::AppHandle, current: String, dir: String) -> Result<String, String> {
+    let src = PathBuf::from(current.trim());
+    let parent = PathBuf::from(dir.trim());
+    if current.trim().is_empty() {
+        return Err("current data dir is empty; open settings after bridge is ready and try again".into());
+    }
+    if dir.trim().is_empty() {
+        return Err("target parent directory is empty".into());
+    }
+    if !src.exists() {
+        return Err(format!("current data dir does not exist: {}", src.to_string_lossy()));
+    }
+    if !src.is_dir() {
+        return Err(format!("current data dir is not a directory: {}", src.to_string_lossy()));
+    }
+    std::fs::create_dir_all(&parent).map_err(|e| format!("cannot create target parent dir: {}", e))?;
+    let src_c = src.canonicalize().unwrap_or(src.clone());
+    let parent_c = parent.canonicalize().unwrap_or(parent.clone());
+    let data_dir_name = src_c
+        .file_name()
+        .ok_or_else(|| "current data dir has no folder name".to_string())?;
+    let dst = parent_c.join(data_dir_name);
+    let dst_c = if dst.exists() { dst.canonicalize().unwrap_or(dst.clone()) } else { dst.clone() };
+    if src_c == dst_c {
+        return Ok(set_data_dir_override_value(dst_c.to_string_lossy().as_ref())?);
+    }
+    if dst_c.starts_with(&src_c) {
+        return Err("target data dir cannot be inside the current data dir".into());
+    }
+    if dst_c.exists() {
+        return Err(format!("target data dir already exists: {}", dst_c.to_string_lossy()));
+    }
+    copy_dir_replace(&src_c, &dst_c)?;
+    let saved = set_data_dir_override_value(dst_c.to_string_lossy().as_ref())?;
+    switch_bridge(&app_handle)?;
+    std::fs::remove_dir_all(&src_c).map_err(|e| format!("remove old data dir {:?}: {}", src_c, e))?;
+    Ok(saved)
+}
 /// Run the contract probe (frontends/ga_contract_probe.py, shipped with the bundle) against a
 /// target ga_root using the bundle python. Returns Ok(()) if the核 satisfies the bridge/conductor
 /// contract, or Err(message) listing what's missing / why it's incompatible.
@@ -984,7 +1087,7 @@ pub fn run() {
                 let _ = w.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![start_bridge_with_config, start_bridge, get_config, export_mykey, pick_directory, get_ga_source, set_ga_source, clear_ga_source, shortcut_should_ask, shortcut_decide, get_prepare_error])
+        .invoke_handler(tauri::generate_handler![start_bridge_with_config, start_bridge, get_config, export_mykey, pick_directory, get_ga_source, set_ga_source, clear_ga_source, get_data_dir_override, set_data_dir, clear_data_dir, move_data_dir, shortcut_should_ask, shortcut_decide, get_prepare_error])
         .setup(move |app| {
             // Show the loading window immediately so the first-run prepare isn't a blank screen.
             // The window starts on loading.html (a local page), so no "connection refused" flash.

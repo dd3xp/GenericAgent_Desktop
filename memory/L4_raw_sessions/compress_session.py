@@ -237,7 +237,11 @@ def batch_process(src, l4_dir=None, dry_run=True):
     return report
 
 # ── CLI ──
-RAW_DIR = os.path.join(os.path.dirname(os.path.dirname(L4_DIR)), 'temp', 'model_responses')
+import sys as _sys
+_repo = os.path.dirname(os.path.dirname(L4_DIR))
+if _repo not in _sys.path: _sys.path.insert(0, _repo)
+import paths
+RAW_DIR = paths.temp_dir('model_responses')
 
 if __name__ == '__main__':
     import argparse
