@@ -39,6 +39,11 @@ description = "Clear the external GA source override and fall back to the bundle
 commands.allow = ["clear_ga_source"]
 
 [[permission]]
+identifier = "allow-move-ga-runtime"
+description = "Copy the active GenericAgent runtime into a selected directory and switch to it."
+commands.allow = ["move_ga_runtime"]
+
+[[permission]]
 identifier = "allow-shortcut-should-ask"
 description = "Check whether to show the first-run desktop-shortcut prompt."
 commands.allow = ["shortcut_should_ask"]

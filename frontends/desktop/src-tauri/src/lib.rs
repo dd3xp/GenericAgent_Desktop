@@ -630,9 +630,10 @@ fn bridge_reported_identity() -> Option<serde_json::Value> {
 }
 
 fn norm_path(p: &str) -> String {
-    std::fs::canonicalize(p)
+    let normalized = std::fs::canonicalize(p)
         .map(|c| c.to_string_lossy().to_string())
-        .unwrap_or_else(|_| p.to_string())
+        .unwrap_or_else(|_| p.to_string());
+    normalized.strip_prefix(r"\\?\").unwrap_or(&normalized).to_string()
 }
 
 /// A running bridge is "ours" only when it serves the same install path AND was spawned by the
@@ -855,16 +856,30 @@ fn stop_current_bridge() {
 /// webview so it reconnects. Shared by set_ga_source / clear_ga_source.
 fn switch_bridge(app_handle: &tauri::AppHandle) -> Result<String, String> {
     stop_current_bridge();
-    let (py, project) = get_or_discover_config();
-    if project.is_empty() {
+    let (python_path, project_dir) = get_or_discover_config();
+    if project_dir.is_empty() {
         return Err("no GenericAgent source resolved".into());
     }
-    spawn_bridge_process(&py, &project)?;
+
+    let expected_ga_root = valid_ga_source_override().unwrap_or_else(|| project_dir.clone());
+    spawn_bridge_process(&python_path, &project_dir)?;
     if !wait_for_port(14168, Duration::from_secs(20)) {
         return Err("bridge did not become ready within 20s".into());
     }
-    show_bridge_window(app_handle);
-    Ok(project)
+
+    let identity_deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < identity_deadline {
+        if bridge_identity_matches(&expected_ga_root) {
+            show_bridge_window(app_handle);
+            return Ok(project_dir);
+        }
+        thread::sleep(Duration::from_millis(150));
+    }
+
+    Err(format!(
+        "bridge started but reported an unexpected GA_ROOT (expected {})",
+        norm_path(&expected_ga_root),
+    ))
 }
 
 #[tauri::command]
@@ -935,6 +950,106 @@ fn set_ga_source(app_handle: tauri::AppHandle, dir: String) -> Result<String, St
 }
 
 #[tauri::command]
+fn move_ga_runtime(
+    app_handle: tauri::AppHandle,
+    target_parent: String,
+) -> Result<String, String> {
+    let bundled_project = get_or_discover_config().1;
+    let old_override = read_settings()
+        .get("ga_source_override")
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    let source = old_override
+        .clone()
+        .unwrap_or_else(|| bundled_project.clone());
+    let source_path = PathBuf::from(&source);
+
+    if !source_path.join("agentmain.py").exists() {
+        return Err("active GenericAgent runtime is missing agentmain.py".into());
+    }
+
+    let parent_path = PathBuf::from(&target_parent);
+    std::fs::create_dir_all(&parent_path)
+        .map_err(|error| format!("cannot create target directory: {}", error))?;
+    let target_path = parent_path.join("GenericAgent");
+    if norm_path(&source) == norm_path(&target_path.to_string_lossy()) {
+        return Ok(norm_path(&source));
+    }
+    if target_path.exists() {
+        return Err(format!("target already exists: {}", target_path.display()));
+    }
+
+    std::fs::create_dir_all(&target_path)
+        .map_err(|error| format!("cannot create target runtime: {}", error))?;
+    if let Err(error) = copy_runtime_tree(&source_path, &target_path) {
+        let _ = std::fs::remove_dir_all(&target_path);
+        return Err(error);
+    }
+
+    let target_root = norm_path(&target_path.to_string_lossy());
+    merge_settings(serde_json::json!({ "ga_source_override": target_root }));
+    match switch_bridge(&app_handle) {
+        Ok(_) => {
+            let source_is_external_override = old_override
+                .as_ref()
+                .map(|old| {
+                    norm_path(old) == norm_path(&source)
+                        && norm_path(old) != norm_path(&bundled_project)
+                        && norm_path(old) != target_root
+                })
+                .unwrap_or(false);
+            if source_is_external_override {
+                if let Some(old) = old_override {
+                    if let Err(error) = std::fs::remove_dir_all(&old) {
+                        eprintln!("[tauri] failed to remove old external runtime {}: {}", old, error);
+                    }
+                }
+            }
+            Ok(target_root)
+        }
+        Err(switch_error) => {
+            if let Some(old) = old_override {
+                merge_settings(serde_json::json!({ "ga_source_override": old }));
+            } else {
+                remove_setting("ga_source_override");
+            }
+            let restore_result = switch_bridge(&app_handle);
+            let _ = std::fs::remove_dir_all(&target_path);
+            match restore_result {
+                Ok(_) => Err(format!("{}; previous runtime restored", switch_error)),
+                Err(restore_error) => Err(format!(
+                    "{}; failed to restore previous runtime: {}",
+                    switch_error, restore_error
+                )),
+            }
+        }
+    }
+}
+
+fn copy_runtime_tree(
+    source: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<(), String> {
+    for entry in std::fs::read_dir(source)
+        .map_err(|error| format!("cannot read runtime: {}", error))?
+    {
+        let entry = entry.map_err(|error| format!("cannot read runtime entry: {}", error))?;
+        let source_entry = entry.path();
+        let target_entry = target.join(entry.file_name());
+
+        if source_entry.is_dir() {
+            std::fs::create_dir_all(&target_entry)
+                .map_err(|error| format!("cannot create copied directory: {}", error))?;
+            copy_runtime_tree(&source_entry, &target_entry)?;
+        } else {
+            std::fs::copy(&source_entry, &target_entry)
+                .map_err(|error| format!("cannot copy runtime file: {}", error))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn clear_ga_source(app_handle: tauri::AppHandle) -> Result<String, String> {
     remove_setting("ga_source_override");
     switch_bridge(&app_handle)
@@ -984,7 +1099,7 @@ pub fn run() {
                 let _ = w.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![start_bridge_with_config, start_bridge, get_config, export_mykey, pick_directory, get_ga_source, set_ga_source, clear_ga_source, shortcut_should_ask, shortcut_decide, get_prepare_error])
+        .invoke_handler(tauri::generate_handler![start_bridge_with_config, start_bridge, get_config, export_mykey, pick_directory, get_ga_source, set_ga_source, clear_ga_source, move_ga_runtime, shortcut_should_ask, shortcut_decide, get_prepare_error])
         .setup(move |app| {
             // Show the loading window immediately so the first-run prepare isn't a blank screen.
             // The window starts on loading.html (a local page), so no "connection refused" flash.

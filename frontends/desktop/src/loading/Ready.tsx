@@ -1,15 +1,64 @@
 import { useEffect } from 'react';
+import { Modal } from '@douyinfe/semi-ui';
 import { t } from './i18n';
 
 export function ReadyScreen() {
   useEffect(() => {
-    // In the current flow, the Rust setup thread navigates the window to index.html
-    // once the bridge port is ready. This timeout is a safety net: if the Rust navigate
-    // doesn't fire (e.g., after Phase 4 moves navigation to the frontend), we do it here.
-    const timer = setTimeout(() => {
-      window.location.href = '/index.html';
-    }, 1500);
-    return () => clearTimeout(timer);
+    let disposed = false;
+    const invoke = (window as any).__TAURI__?.core?.invoke;
+
+    const navigateToApp = () => {
+      if (!disposed) {
+        window.location.href = '/index.html';
+      }
+    };
+
+    const askForShortcut = async () => {
+      if (!invoke) {
+        navigateToApp();
+        return;
+      }
+
+      try {
+        const shouldAsk = await invoke('shortcut_should_ask');
+        if (disposed) return;
+        if (!shouldAsk) {
+          navigateToApp();
+          return;
+        }
+
+        await new Promise<void>((resolve) => {
+          let decided = false;
+          const decide = async (create: boolean) => {
+            if (decided || disposed) {
+              resolve();
+              return;
+            }
+            decided = true;
+            try {
+              await invoke('shortcut_decide', { create });
+            } finally {
+              resolve();
+            }
+          };
+
+          Modal.confirm({
+            title: t('shortcut.askConfirm'),
+            content: t('shortcut.askConfirm'),
+            onOk: () => decide(true),
+            onCancel: () => decide(false),
+          });
+        });
+        navigateToApp();
+      } catch {
+        navigateToApp();
+      }
+    };
+
+    void askForShortcut();
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   return (

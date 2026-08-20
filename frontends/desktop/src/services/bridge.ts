@@ -206,6 +206,10 @@ export async function saveMykeyContent(content: string): Promise<void> {
   }
 }
 
+export async function importMemory(sourceDir: string): Promise<Record<string, unknown>> {
+  return (await ga()!.rpc('memory/import', { sourceDir })) as Record<string, unknown>;
+}
+
 export async function tauriInvoke(cmd: string, args: Record<string, unknown>): Promise<unknown> {
   if (!isBridgeAvailable()) throw new Error('Tauri not available in browser dev mode');
   return ga()!.tauriInvoke(cmd, args);
